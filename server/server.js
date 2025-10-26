@@ -75,4 +75,4 @@ app.get("/api/full/:plate", async (req, res) => {
     res.json(data);
   } catch (error) {
     console.error("RapidCarCheck fetch error:", error);
-    res.status(500).json({ error: "Server error fetchin
+    res.status(500).json({ error: "Server error fetching RapidCarCheck data" });
