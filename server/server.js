@@ -53,12 +53,26 @@ app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
 
   try {
-    const response = await fetch(`https://api.rapidcarcheck.co.uk/v1.0/vehicle?vrm=${plate}`, {
-      headers: {
-        "x-rapidapi-key": process.env.RAPIDCARCHECK_KEY,
-        "Accept": "application/json",
-      },
-    });
+    // Build the correct URL using your environment variable + plate number
+    const apiKey = process.env.RAPIDCARCHECK_KEY;
+    const domain = "https://smartcheck-9o2u.onrender.com"; // your Render domain
+    const url = `https://www.rapidcarcheck.co.uk/api/?key=${apiKey}&pro=1&domain=${domain}&plate=${plate}`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error("RapidCarCheck API error:", text);
+      return res.status(response.status).json({ error: "RapidCarCheck API error", details: text });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error("RapidCarCheck fetch error:", error);
+    res.status(500).json({ error: "Server error fetching RapidCarCheck data", details: error.message });
+  }
+});
 
     if (!response.ok) {
       const text = await response.text();
