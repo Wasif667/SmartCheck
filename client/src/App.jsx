@@ -7,10 +7,9 @@ export default function App() {
   const [basicData, setBasicData] = useState(null);
   const [fullData, setFullData] = useState(null);
 
-  // --- Basic DVLA check ---
+  // Basic DVLA check
   async function handleBasicCheck() {
-    if (!reg.trim()) return alert("Enter a registration number");
-
+    if (!reg.trim()) return alert("Please enter a registration number");
     setLoading(true);
     setError(null);
     setFullData(null);
@@ -27,10 +26,9 @@ export default function App() {
     }
   }
 
-  // --- Full RapidCarCheck ---
+  // RapidCarCheck full report
   async function handleFullCheck() {
-    if (!reg.trim()) return alert("Enter a registration number");
-
+    if (!reg.trim()) return alert("Please enter a registration number");
     setLoading(true);
     setError(null);
     setBasicData(null);
@@ -50,7 +48,7 @@ export default function App() {
   return (
     <div className="card">
       <h1>Smart Car Check</h1>
-      <p>Enter a UK registration number to view DVLA or full vehicle data.</p>
+      <p>Enter a UK number plate to check vehicle info.</p>
 
       <div className="formRow">
         <input
@@ -76,7 +74,7 @@ export default function App() {
 
       {error && <div style={{ color: "#f87171" }}>⚠️ {error}</div>}
 
-      {/* --- DVLA Basic Info --- */}
+      {/* Basic DVLA info */}
       {basicData && (
         <div className="result">
           <h2>Basic DVLA Information</h2>
@@ -95,7 +93,7 @@ export default function App() {
         </div>
       )}
 
-      {/* --- Full RapidCarCheck Info --- */}
+      {/* Full RapidCarCheck info */}
       {fullData && (
         <div className="result">
           <h2>Full Vehicle Report</h2>
@@ -105,8 +103,8 @@ export default function App() {
               <tr><td>Make:</td><td>{fullData.make}</td></tr>
               <tr><td>Model:</td><td>{fullData.model}</td></tr>
               <tr><td>Colour:</td><td>{fullData.colour}</td></tr>
-              <tr><td>Engine Size:</td><td>{fullData.engineCapacity} cc</td></tr>
               <tr><td>Fuel Type:</td><td>{fullData.fuelType}</td></tr>
+              <tr><td>Engine Size:</td><td>{fullData.engineCapacity} cc</td></tr>
               <tr><td>Transmission:</td><td>{fullData.transmission}</td></tr>
               <tr><td>Finance Owed:</td><td>{fullData.financeOwed ? "⚠️ Yes" : "✅ Clear"}</td></tr>
               <tr><td>Stolen:</td><td>{fullData.stolen ? "⚠️ Yes" : "✅ No"}</td></tr>
@@ -127,3 +125,4 @@ export default function App() {
     </div>
   );
 }
+
