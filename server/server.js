@@ -20,23 +20,14 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 
-// ----------------------------
-// Health Check
-// ----------------------------
+// Health
 app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    service: "SmartCheck API",
-    time: new Date().toISOString(),
-  });
+  res.json({ ok: true, service: "SmartCheck API", time: new Date().toISOString() });
 });
 
-// ----------------------------
-// ✅ CLEAN SIMPLE DVLA VEHICLE CHECK
-// ----------------------------
+// ✅ Simple DVLA check (clean fields)
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
-
   try {
     const response = await fetch(
       "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles",
@@ -53,14 +44,10 @@ app.get("/api/check/:plate", async (req, res) => {
     const text = await response.text();
     if (!response.ok) {
       console.error("DVLA API error:", text);
-      return res
-        .status(response.status)
-        .json({ error: "DVLA API error", details: text });
+      return res.status(response.status).json({ error: "DVLA API error", details: text });
     }
-
     const data = JSON.parse(text);
 
-    // Only return relevant clean fields
     const cleaned = {
       registration: data.registrationNumber || plate,
       make: data.make || null,
@@ -78,23 +65,16 @@ app.get("/api/check/:plate", async (req, res) => {
       motExpiryDate: data.motExpiryDate || null,
       dateOfLastV5CIssued: data.dateOfLastV5CIssued || null,
     };
-
     res.json(cleaned);
   } catch (error) {
     console.error("DVLA fetch error:", error);
-    res.status(500).json({
-      error: "Server error fetching DVLA data",
-      details: error.message,
-    });
+    res.status(500).json({ error: "Server error fetching DVLA data", details: error.message });
   }
 });
 
-// ----------------------------
-// FULL VEHICLE CHECK (RapidCarCheck)
-// ----------------------------
+// ⚡ Full RapidCarCheck (grouped)
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
-
   try {
     const apiKey = process.env.RAPIDCARCHECK_KEY;
     const domain = "https://smartcheck-9o2u.onrender.com";
@@ -102,7 +82,6 @@ app.get("/api/full/:plate", async (req, res) => {
 
     const response = await fetch(url);
     const text = await response.text();
-
     console.log("🔍 RapidCarCheck raw:", text.slice(0, 500));
 
     let parsed;
@@ -110,10 +89,7 @@ app.get("/api/full/:plate", async (req, res) => {
       parsed = JSON.parse(text);
     } catch {
       const clean = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-      return res.status(500).json({
-        error: "RapidCarCheck returned non-JSON data",
-        details: clean.slice(0, 300),
-      });
+      return res.status(500).json({ error: "RapidCarCheck returned non-JSON data", details: clean.slice(0, 300) });
     }
 
     const result = parsed?.data?.result || {};
@@ -181,27 +157,14 @@ app.get("/api/full/:plate", async (req, res) => {
     res.json(grouped);
   } catch (error) {
     console.error("RapidCarCheck fetch error:", error);
-    res.status(500).json({
-      error: "Server error fetching RapidCarCheck data",
-      details: error.message,
-    });
+    res.status(500).json({ error: "Server error fetching RapidCarCheck data", details: error.message });
   }
 });
 
-// ----------------------------
-// Serve React Frontend
-// ----------------------------
+// Serve React
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir));
+app.get("*", (_, res) => res.sendFile(path.join(publicDir, "index.html")));
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
-});
-
-// ----------------------------
-// Start Server
-// ----------------------------
-app.listen(PORT, () => {
-  console.log(`✅ SmartCheck server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ SmartCheck server running on port ${PORT}`));
 
