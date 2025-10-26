@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import "./styles.css";
 
 export default function App() {
   const [reg, setReg] = useState("");
@@ -45,10 +46,53 @@ export default function App() {
     }
   }
 
+  // Helper: render nested data as tables
+  const renderSection = (title, obj) => {
+    if (!obj || typeof obj !== "object") return null;
+    return (
+      <div className="section">
+        <h3>{title}</h3>
+        <table>
+          <tbody>
+            {Object.entries(obj).map(([key, value]) => {
+              if (Array.isArray(value)) {
+                return (
+                  <tr key={key}>
+                    <td colSpan={2}>
+                      <strong>{key.replace(/_/g, " ")}</strong>
+                      {value.map((v, i) => (
+                        <div key={i} className="subsection">
+                          {renderSection(`${key} #${i + 1}`, v)}
+                        </div>
+                      ))}
+                    </td>
+                  </tr>
+                );
+              } else if (typeof value === "object" && value !== null) {
+                return (
+                  <tr key={key}>
+                    <td colSpan={2}>{renderSection(key.replace(/_/g, " "), value)}</td>
+                  </tr>
+                );
+              } else {
+                return (
+                  <tr key={key}>
+                    <td>{key.replace(/_/g, " ")}</td>
+                    <td>{String(value)}</td>
+                  </tr>
+                );
+              }
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
-    <div className="card">
-      <h1>Smart Car Check</h1>
-      <p>Enter a UK number plate to check vehicle info.</p>
+    <div className="container">
+      <h1>SmartCheck Vehicle Report</h1>
+      <p>Enter a UK registration number to check a vehicle.</p>
 
       <div className="formRow">
         <input
@@ -59,7 +103,7 @@ export default function App() {
         />
       </div>
 
-      <div style={{ display: "flex", gap: "10px", marginBottom: "1em" }}>
+      <div className="buttonRow">
         <button onClick={handleBasicCheck} disabled={loading}>
           {loading ? "Checking..." : "Basic Check (DVLA)"}
         </button>
@@ -72,57 +116,31 @@ export default function App() {
         </button>
       </div>
 
-      {error && <div style={{ color: "#f87171" }}>⚠️ {error}</div>}
+      {error && <div className="error">⚠️ {error}</div>}
 
-      {/* Basic DVLA info */}
       {basicData && (
         <div className="result">
           <h2>Basic DVLA Information</h2>
-          <table>
-            <tbody>
-              <tr><td>Registration:</td><td>{basicData.registrationNumber}</td></tr>
-              <tr><td>Make:</td><td>{basicData.make}</td></tr>
-              <tr><td>Model:</td><td>{basicData.model}</td></tr>
-              <tr><td>Colour:</td><td>{basicData.colour}</td></tr>
-              <tr><td>Fuel Type:</td><td>{basicData.fuelType}</td></tr>
-              <tr><td>Year of Manufacture:</td><td>{basicData.yearOfManufacture}</td></tr>
-              <tr><td>Tax Status:</td><td>{basicData.taxStatus}</td></tr>
-              <tr><td>MOT Status:</td><td>{basicData.motStatus}</td></tr>
-            </tbody>
-          </table>
+          {renderSection("DVLA Vehicle Data", basicData)}
         </div>
       )}
 
-      {/* Full RapidCarCheck info */}
       {fullData && (
         <div className="result">
-          <h2>Full Vehicle Report</h2>
-          <table>
-            <tbody>
-              <tr><td>Registration:</td><td>{fullData.vrm}</td></tr>
-              <tr><td>Make:</td><td>{fullData.make}</td></tr>
-              <tr><td>Model:</td><td>{fullData.model}</td></tr>
-              <tr><td>Colour:</td><td>{fullData.colour}</td></tr>
-              <tr><td>Fuel Type:</td><td>{fullData.fuelType}</td></tr>
-              <tr><td>Engine Size:</td><td>{fullData.engineCapacity} cc</td></tr>
-              <tr><td>Transmission:</td><td>{fullData.transmission}</td></tr>
-              <tr><td>Finance Owed:</td><td>{fullData.financeOwed ? "⚠️ Yes" : "✅ Clear"}</td></tr>
-              <tr><td>Stolen:</td><td>{fullData.stolen ? "⚠️ Yes" : "✅ No"}</td></tr>
-              <tr><td>Written Off:</td><td>{fullData.writeOff ? "⚠️ Yes" : "✅ No"}</td></tr>
-              <tr><td>Mileage:</td><td>{fullData.mileage || "N/A"}</td></tr>
-            </tbody>
-          </table>
-
-          {fullData.motExpiryDate && (
-            <p>MOT Expiry: <strong>{fullData.motExpiryDate}</strong></p>
-          )}
+          <h2>Full Vehicle Report (RapidCarCheck)</h2>
+          {fullData.vehicle_details &&
+            renderSection("Vehicle Details", fullData.vehicle_details)}
+          {fullData.model_details &&
+            renderSection("Model Details", fullData.model_details)}
+          {fullData.vehicle_history &&
+            renderSection("Vehicle History", fullData.vehicle_history)}
+          {renderSection("Other Data", fullData)}
         </div>
       )}
 
-      <div className="footer">
-        Data sources: DVLA Vehicle Enquiry API & RapidCarCheck API
-      </div>
+      <div className="footer">Data from DVLA & RapidCarCheck APIs</div>
     </div>
   );
 }
+
 
