@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server (DVLA + RapidCarCheck)
+// SmartCheck Server (DVLA + RapidCarCheck, Fully Fixed)
 // ----------------------------
 
 import express from "express";
@@ -20,12 +20,20 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 
-// Health
+// ----------------------------
+// Health Check
+// ----------------------------
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "SmartCheck API", time: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: "SmartCheck API",
+    time: new Date().toISOString(),
+  });
 });
 
-// ✅ Simple DVLA check (clean fields)
+// ----------------------------
+// ✅ Simple DVLA Vehicle Check
+// ----------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
   try {
@@ -46,6 +54,7 @@ app.get("/api/check/:plate", async (req, res) => {
       console.error("DVLA API error:", text);
       return res.status(response.status).json({ error: "DVLA API error", details: text });
     }
+
     const data = JSON.parse(text);
 
     const cleaned = {
@@ -65,16 +74,23 @@ app.get("/api/check/:plate", async (req, res) => {
       motExpiryDate: data.motExpiryDate || null,
       dateOfLastV5CIssued: data.dateOfLastV5CIssued || null,
     };
+
     res.json(cleaned);
   } catch (error) {
     console.error("DVLA fetch error:", error);
-    res.status(500).json({ error: "Server error fetching DVLA data", details: error.message });
+    res.status(500).json({
+      error: "Server error fetching DVLA data",
+      details: error.message,
+    });
   }
 });
 
-// ⚡ Full RapidCarCheck (grouped)
+// ----------------------------
+// ⚡ RapidCarCheck - Full Vehicle Check (Flexible Parsing)
+// ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
+
   try {
     const apiKey = process.env.RAPIDCARCHECK_KEY;
     const domain = "https://smartcheck-9o2u.onrender.com";
@@ -82,6 +98,7 @@ app.get("/api/full/:plate", async (req, res) => {
 
     const response = await fetch(url);
     const text = await response.text();
+
     console.log("🔍 RapidCarCheck raw:", text.slice(0, 500));
 
     let parsed;
@@ -89,7 +106,10 @@ app.get("/api/full/:plate", async (req, res) => {
       parsed = JSON.parse(text);
     } catch {
       const clean = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-      return res.status(500).json({ error: "RapidCarCheck returned non-JSON data", details: clean.slice(0, 300) });
+      return res.status(500).json({
+        error: "RapidCarCheck returned non-JSON data",
+        details: clean.slice(0, 300),
+      });
     }
 
     const result = parsed?.data?.result || {};
@@ -106,65 +126,90 @@ app.get("/api/full/:plate", async (req, res) => {
     const keepers = result.vehicle_details?.keeper_change_list || [];
     const plates = result.vehicle_details?.plate_change_list || [];
 
+    // 🧹 Clean and format output — ensures consistent key/value pairs
     const grouped = {
       summary: {
         registration: v.vehicle_registration_mark || plate,
-        make: v.dvla_manufacturer_desc || m.manufacturer_desc || null,
-        model: v.dvla_model_desc || m.model_desc || null,
-        colour: c.colour || null,
-        fuelType: v.dvla_fuel_desc || m.ukvd_fuel_type_desc || null,
-        engineSize: v.engine_capacity_cc || m.engine_capacity_cc || null,
+        make: v.dvla_manufacturer_desc || m.manufacturer_desc || "N/A",
+        model: v.dvla_model_desc || m.model_desc || "N/A",
+        colour: c.colour || "N/A",
+        fuelType: v.dvla_fuel_desc || m.ukvd_fuel_type_desc || "N/A",
+        engineSize: v.engine_capacity_cc || m.engine_capacity_cc || "N/A",
         transmission: trans.transmission_type || "N/A",
-        co2: emissions.co2_gkm || null,
-        mpg: fuel.combined_mpg || null,
-        doors: body.number_doors || null,
-        seats: body.number_seats || null,
+        co2: emissions.co2_gkm || "N/A",
+        mpg: fuel.combined_mpg || "N/A",
+        doors: body.number_doors || "N/A",
+        seats: body.number_seats || "N/A",
       },
+
       history: {
-        previousKeepers: keepers.map((k) => ({
-          number: k.number_previous_keepers,
-          lastChange: k.date_of_last_keeper_change,
-        })),
-        plateChanges: plates.map((p) => ({
-          from: p.previous_vehicle_registration_mark,
-          to: p.current_vehicle_registration_mark,
-          date: p.cherished_plate_transfer_date,
-        })),
-        financeOwed: result.financeOwed || false,
-        stolen: result.stolen || false,
-        writeOff: result.writeOff || false,
-        mileage: result.mileage || "N/A",
+        financeOwed:
+          result.finance_details?.is_finance_active ||
+          result.financeOwed ||
+          false,
+        stolen:
+          result.stolen_details?.is_stolen ||
+          result.is_stolen ||
+          false,
+        writeOff:
+          result.insurance_writeoff_details?.is_writeoff ||
+          result.writeOff ||
+          false,
+        mileage:
+          result.mileage || result.odometer_reading || "N/A",
+        previousKeepers: Array.isArray(keepers)
+          ? keepers.map((k) => ({
+              number: k.number_previous_keepers,
+              date: k.date_of_last_keeper_change,
+            }))
+          : [],
+        plateChanges: Array.isArray(plates)
+          ? plates.map((p) => ({
+              from: p.previous_vehicle_registration_mark,
+              to: p.current_vehicle_registration_mark,
+              date: p.cherished_plate_transfer_date,
+            }))
+          : [],
       },
+
       performance: {
-        powerBhp: perf?.power?.power_bhp || null,
-        torqueNm: perf?.torque?.torque_nm || null,
-        topSpeedMph: perf?.statistics?.top_speed_mph || null,
-        acceleration: perf?.statistics?.["0to60_mph"] || null,
+        powerBhp: perf?.power?.power_bhp || "N/A",
+        torqueNm: perf?.torque?.torque_nm || "N/A",
+        topSpeedMph: perf?.statistics?.top_speed_mph || "N/A",
+        acceleration: perf?.statistics?.["0to60_mph"] || "N/A",
       },
+
       technical: {
-        vin: v.vehicle_identification_number || null,
-        engineNumber: v.engine_number || null,
-        wheelplan: v.dvla_wheelplan || null,
-        bodyType: body.ukvd_body_type_desc || null,
-        length: dims.vehicle_length_mm || null,
-        width: dims.vehicle_width_mm || null,
-        height: dims.vehicle_height_mm || null,
-        kerbWeight: weights.min_kerbweight_kg || null,
-        grossWeight: weights.gross_vehicleweight_kg || null,
+        vin: v.vehicle_identification_number || "N/A",
+        engineNumber: v.engine_number || "N/A",
+        bodyType: body.ukvd_body_type_desc || "N/A",
+        wheelplan: v.dvla_wheelplan || "N/A",
+        length: dims.vehicle_length_mm || "N/A",
+        width: dims.vehicle_width_mm || "N/A",
+        height: dims.vehicle_height_mm || "N/A",
+        kerbWeight: weights.min_kerbweight_kg || "N/A",
+        grossWeight: weights.gross_vehicleweight_kg || "N/A",
       },
     };
 
     res.json(grouped);
   } catch (error) {
     console.error("RapidCarCheck fetch error:", error);
-    res.status(500).json({ error: "Server error fetching RapidCarCheck data", details: error.message });
+    res.status(500).json({
+      error: "Server error fetching RapidCarCheck data",
+      details: error.message,
+    });
   }
 });
 
-// Serve React
+// ----------------------------
+// Serve Frontend
+// ----------------------------
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir));
 app.get("*", (_, res) => res.sendFile(path.join(publicDir, "index.html")));
 
-app.listen(PORT, () => console.log(`✅ SmartCheck server running on port ${PORT}`));
-
+// ----------------------------
+app.listen(PORT, () =>
+  console.log(`✅ SmartCheck server running on port ${PORT}`)
+);
