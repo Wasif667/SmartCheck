@@ -5,65 +5,40 @@ export default function App() {
   const [reg, setReg] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [fullData, setFullData] = useState(null);
   const [basicData, setBasicData] = useState(null);
+  const [fullData, setFullData] = useState(null);
 
-  // ----------------------------
-  // Fetch Basic DVLA Check
-  // ----------------------------
-  async function handleBasicCheck() {
-    if (!reg.trim()) return alert("Please enter a registration number");
-    setLoading(true);
-    setError(null);
-    setFullData(null);
-
-    try {
-      const res = await fetch(`/api/check/${reg.trim().toUpperCase()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Vehicle not found");
-      setBasicData(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // ----------------------------
-  // Fetch Full RapidCarCheck
-  // ----------------------------
-  async function handleFullCheck() {
+  const fetchData = async (endpoint, setter) => {
     if (!reg.trim()) return alert("Please enter a registration number");
     setLoading(true);
     setError(null);
     setBasicData(null);
+    setFullData(null);
 
     try {
-      const res = await fetch(`/api/full/${reg.trim().toUpperCase()}`);
+      const res = await fetch(`/api/${endpoint}/${reg.trim().toUpperCase()}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Full report not found");
-      setFullData(data);
+      if (!res.ok) throw new Error(data.error || "Error fetching data");
+      setter(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  const renderRow = (label, value) => {
-    if (!value && value !== 0) return null;
-    return (
+  const renderRow = (label, value) =>
+    value ? (
       <div className="row">
         <span className="label">{label}</span>
         <span className="value">{String(value)}</span>
       </div>
-    );
-  };
+    ) : null;
 
   return (
     <div className="container">
       <h1>SmartCheck Vehicle Report</h1>
-      <p>Enter a UK vehicle registration to run a check.</p>
+      <p>Enter a registration to run a quick DVLA or full check.</p>
 
       <div className="formRow">
         <input
@@ -75,11 +50,11 @@ export default function App() {
       </div>
 
       <div className="buttonRow">
-        <button onClick={handleBasicCheck} disabled={loading}>
-          {loading ? "Checking..." : "Basic Check (DVLA)"}
+        <button onClick={() => fetchData("check", setBasicData)} disabled={loading}>
+          {loading ? "Checking..." : "Simple Check (DVLA)"}
         </button>
         <button
-          onClick={handleFullCheck}
+          onClick={() => fetchData("full", setFullData)}
           disabled={loading}
           className="btnFull"
         >
@@ -89,11 +64,9 @@ export default function App() {
 
       {error && <div className="error">⚠️ {error}</div>}
 
-      {/* ----------------------------
-          BASIC DVLA CHECK RESULT
-      ---------------------------- */}
+      {/* SIMPLE DVLA CHECK */}
       {basicData && (
-        <div className="section">
+        <div className="dvlaCard">
           <h2>DVLA Simple Vehicle Check</h2>
           {renderRow("Registration", basicData.registration)}
           {renderRow("Make", basicData.make)}
@@ -105,99 +78,30 @@ export default function App() {
           {renderRow("Body Type", basicData.bodyType)}
           {renderRow("Year of Manufacture", basicData.yearOfManufacture)}
           {renderRow("CO₂ Emissions (g/km)", basicData.co2Emissions)}
-          {renderRow("Tax Due Date", basicData.taxDueDate)}
           {renderRow("Tax Status", basicData.taxStatus)}
+          {renderRow("Tax Due Date", basicData.taxDueDate)}
           {renderRow("MOT Status", basicData.motStatus)}
           {renderRow("MOT Expiry Date", basicData.motExpiryDate)}
           {renderRow("Date of Last V5C Issued", basicData.dateOfLastV5CIssued)}
         </div>
       )}
 
-      {/* ----------------------------
-          FULL VEHICLE CHECK RESULT
-      ---------------------------- */}
+      {/* FULL CHECK */}
       {fullData && (
         <div className="sectionGroup">
-          {/* VEHICLE SUMMARY */}
           <div className="section">
             <h2>Vehicle Summary</h2>
-            {renderRow("Registration", fullData.summary.registration)}
-            {renderRow("Make", fullData.summary.make)}
-            {renderRow("Model", fullData.summary.model)}
-            {renderRow("Colour", fullData.summary.colour)}
-            {renderRow("Fuel Type", fullData.summary.fuelType)}
-            {renderRow("Engine Size (cc)", fullData.summary.engineSize)}
-            {renderRow("Transmission", fullData.summary.transmission)}
-            {renderRow("CO₂ Emissions (g/km)", fullData.summary.co2)}
-            {renderRow("MPG (Combined)", fullData.summary.mpg)}
-            {renderRow("Doors", fullData.summary.doors)}
-            {renderRow("Seats", fullData.summary.seats)}
+            {Object.entries(fullData.summary).map(([k, v]) => renderRow(k, v))}
           </div>
-
-          {/* VEHICLE HISTORY */}
           <div className="section">
             <h2>Vehicle History</h2>
-            {renderRow("Finance Owed", fullData.history.financeOwed ? "❌ Yes" : "✅ Clear")}
-            {renderRow("Stolen", fullData.history.stolen ? "❌ Yes" : "✅ No")}
-            {renderRow("Written Off", fullData.history.writeOff ? "❌ Yes" : "✅ No")}
-            {renderRow("Mileage", fullData.history.mileage)}
-            <div className="subsection">
-              <h3>Previous Keepers</h3>
-              {fullData.history.previousKeepers.length > 0 ? (
-                fullData.history.previousKeepers.map((k, i) => (
-                  <div key={i} className="row">
-                    Keeper {k.number} – Changed on {k.lastChange}
-                  </div>
-                ))
-              ) : (
-                <p>No previous keepers listed.</p>
-              )}
-            </div>
-
-            <div className="subsection">
-              <h3>Plate Changes</h3>
-              {fullData.history.plateChanges.length > 0 ? (
-                fullData.history.plateChanges.map((p, i) => (
-                  <div key={i} className="row">
-                    {p.from} → {p.to} ({p.date})
-                  </div>
-                ))
-              ) : (
-                <p>No plate changes recorded.</p>
-              )}
-            </div>
-          </div>
-
-          {/* PERFORMANCE & ECONOMY */}
-          <div className="section">
-            <h2>Performance & Economy</h2>
-            {renderRow("Power (bhp)", fullData.performance.powerBhp)}
-            {renderRow("Torque (Nm)", fullData.performance.torqueNm)}
-            {renderRow("Top Speed (mph)", fullData.performance.topSpeedMph)}
-            {renderRow("0–60 mph", fullData.performance.acceleration)}
-          </div>
-
-          {/* TECHNICAL DETAILS */}
-          <div className="section">
-            <h2>Technical Details</h2>
-            {renderRow("VIN", fullData.technical.vin)}
-            {renderRow("Engine Number", fullData.technical.engineNumber)}
-            {renderRow("Body Type", fullData.technical.bodyType)}
-            {renderRow("Wheelplan", fullData.technical.wheelplan)}
-            {renderRow("Kerb Weight (kg)", fullData.technical.kerbWeight)}
-            {renderRow("Gross Weight (kg)", fullData.technical.grossWeight)}
-            {renderRow("Length (mm)", fullData.technical.length)}
-            {renderRow("Width (mm)", fullData.technical.width)}
-            {renderRow("Height (mm)", fullData.technical.height)}
+            {Object.entries(fullData.history).map(([k, v]) => renderRow(k, JSON.stringify(v)))}
           </div>
         </div>
       )}
 
-      <footer className="footer">
-        Data provided by DVLA & RapidCarCheck APIs
-      </footer>
+      <footer className="footer">Data provided by DVLA & RapidCarCheck</footer>
     </div>
   );
 }
-
 
