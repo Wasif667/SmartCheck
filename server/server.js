@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server (Render-Ready, Complete Vehicle Check Layout)
+// SmartCheck Server (with Clean Simple DVLA Check)
 // ----------------------------
 
 import express from "express";
@@ -32,7 +32,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // ----------------------------
-// DVLA Basic Vehicle Check
+// ✅ CLEAN DVLA BASIC VEHICLE CHECK
 // ----------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -50,14 +50,36 @@ app.get("/api/check/:plate", async (req, res) => {
       }
     );
 
+    const text = await response.text();
     if (!response.ok) {
-      const text = await response.text();
       console.error("DVLA API error:", text);
-      return res.status(response.status).json({ error: "DVLA API error", details: text });
+      return res
+        .status(response.status)
+        .json({ error: "DVLA API error", details: text });
     }
 
-    const data = await response.json();
-    res.json(data);
+    const data = JSON.parse(text);
+
+    // Extract only the desired fields
+    const cleaned = {
+      registration: data.registrationNumber || plate,
+      make: data.make || null,
+      model: data.model || null,
+      colour: data.colour || null,
+      fuelType: data.fuelType || null,
+      engineSize: data.engineCapacity || null,
+      transmission: data.transmission || null,
+      bodyType: data.bodyType || null,
+      yearOfManufacture: data.yearOfManufacture || null,
+      co2Emissions: data.co2Emissions || null,
+      taxDueDate: data.taxDueDate || null,
+      taxStatus: data.taxStatus || null,
+      motStatus: data.motStatus || null,
+      motExpiryDate: data.motExpiryDate || null,
+      dateOfLastV5CIssued: data.dateOfLastV5CIssued || null,
+    };
+
+    res.json(cleaned);
   } catch (error) {
     console.error("DVLA fetch error:", error);
     res.status(500).json({
@@ -68,7 +90,7 @@ app.get("/api/check/:plate", async (req, res) => {
 });
 
 // ----------------------------
-// RapidCarCheck Complete Vehicle Check (Grouped Data for Frontend)
+// RapidCarCheck Complete Vehicle Check (Full Data)
 // ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -94,7 +116,6 @@ app.get("/api/full/:plate", async (req, res) => {
       });
     }
 
-    // Navigate to correct nested data structure
     const result = parsed?.data?.result || {};
     const v = result.vehicle_details?.vehicle_identification || {};
     const c = result.vehicle_details?.colour_details || {};
@@ -109,9 +130,6 @@ app.get("/api/full/:plate", async (req, res) => {
     const keepers = result.vehicle_details?.keeper_change_list || [];
     const plates = result.vehicle_details?.plate_change_list || [];
 
-    // ----------------------------
-    // Grouped + Flattened Object
-    // ----------------------------
     const grouped = {
       summary: {
         registration: v.vehicle_registration_mark || plate,
