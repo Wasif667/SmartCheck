@@ -1,6 +1,6 @@
 body {
   font-family: "Inter", sans-serif;
-  background-color: #f5f5f7;
+  background: #f3f4f6;
   color: #222;
   margin: 0;
   padding: 0;
@@ -17,7 +17,6 @@ body {
 
 h1 {
   text-align: center;
-  font-size: 2rem;
   margin-bottom: 10px;
 }
 
@@ -52,7 +51,6 @@ button {
   color: white;
   border: none;
   padding: 10px 18px;
-  font-size: 1rem;
   border-radius: 6px;
   cursor: pointer;
 }
@@ -75,35 +73,21 @@ button:disabled {
   margin-bottom: 20px;
 }
 
-.sectionGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.section {
-  background: #fafafa;
-  border: 1px solid #e5e7eb;
+/* ---------------------------- */
+/* DVLA Simple Check Card */
+/* ---------------------------- */
+.dvlaCard {
+  background: #f0fdf4;
+  border: 3px solid #16a34a;
   border-radius: 10px;
   padding: 20px;
+  margin-top: 20px;
 }
 
-.section h2 {
-  font-size: 1.2rem;
-  color: #1f2937;
+.dvlaCard h2 {
+  color: #166534;
+  font-size: 1.3rem;
   margin-top: 0;
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 5px;
-}
-
-.subsection {
-  margin-top: 10px;
-}
-
-.subsection h3 {
-  font-size: 1rem;
-  color: #374151;
-  margin-bottom: 6px;
 }
 
 .row {
@@ -111,16 +95,36 @@ button:disabled {
   justify-content: space-between;
   border-bottom: 1px solid #e5e7eb;
   padding: 6px 0;
-  font-size: 0.95rem;
 }
 
 .label {
   font-weight: 500;
+  color: #333;
 }
 
 .value {
-  text-align: right;
   color: #111;
+}
+
+/* ---------------------------- */
+/* Full Vehicle Check Sections */
+/* ---------------------------- */
+.sectionGroup {
+  margin-top: 30px;
+}
+
+.section {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.section h2 {
+  margin-top: 0;
+  font-size: 1.2rem;
+  color: #1e3a8a;
 }
 
 .footer {
@@ -129,4 +133,3 @@ button:disabled {
   margin-top: 40px;
   font-size: 0.9rem;
 }
-
