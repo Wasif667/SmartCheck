@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server (with Clean Simple DVLA Check)
+// SmartCheck Server (DVLA + RapidCarCheck)
 // ----------------------------
 
 import express from "express";
@@ -32,7 +32,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // ----------------------------
-// ✅ CLEAN DVLA BASIC VEHICLE CHECK
+// ✅ CLEAN SIMPLE DVLA VEHICLE CHECK
 // ----------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -60,7 +60,7 @@ app.get("/api/check/:plate", async (req, res) => {
 
     const data = JSON.parse(text);
 
-    // Extract only the desired fields
+    // Only return relevant clean fields
     const cleaned = {
       registration: data.registrationNumber || plate,
       make: data.make || null,
@@ -90,7 +90,7 @@ app.get("/api/check/:plate", async (req, res) => {
 });
 
 // ----------------------------
-// RapidCarCheck Complete Vehicle Check (Full Data)
+// FULL VEHICLE CHECK (RapidCarCheck)
 // ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -144,7 +144,6 @@ app.get("/api/full/:plate", async (req, res) => {
         doors: body.number_doors || null,
         seats: body.number_seats || null,
       },
-
       history: {
         previousKeepers: keepers.map((k) => ({
           number: k.number_previous_keepers,
@@ -160,14 +159,12 @@ app.get("/api/full/:plate", async (req, res) => {
         writeOff: result.writeOff || false,
         mileage: result.mileage || "N/A",
       },
-
       performance: {
         powerBhp: perf?.power?.power_bhp || null,
         torqueNm: perf?.torque?.torque_nm || null,
         topSpeedMph: perf?.statistics?.top_speed_mph || null,
         acceleration: perf?.statistics?.["0to60_mph"] || null,
       },
-
       technical: {
         vin: v.vehicle_identification_number || null,
         engineNumber: v.engine_number || null,
