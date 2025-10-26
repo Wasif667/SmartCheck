@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server (Render-Ready, Flattened Full Check)
+// SmartCheck Server (Render-Ready, Flattened + Debug Logging)
 // ----------------------------
 
 import express from "express";
@@ -32,7 +32,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // ----------------------------
-// DVLA Vehicle Check
+// DVLA Basic Vehicle Check
 // ----------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -53,10 +53,7 @@ app.get("/api/check/:plate", async (req, res) => {
     if (!response.ok) {
       const text = await response.text();
       console.error("DVLA API error:", text);
-      res
-        .status(response.status)
-        .json({ error: "DVLA API error", details: text });
-      return;
+      return res.status(response.status).json({ error: "DVLA API error", details: text });
     }
 
     const data = await response.json();
@@ -71,7 +68,7 @@ app.get("/api/check/:plate", async (req, res) => {
 });
 
 // ----------------------------
-// RapidCarCheck Full Vehicle Report (Flattened for Frontend)
+// RapidCarCheck Full Vehicle Report (with debug log)
 // ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -83,6 +80,9 @@ app.get("/api/full/:plate", async (req, res) => {
 
     const response = await fetch(url);
     const text = await response.text();
+
+    // 👇 DEBUG LOG — this shows the first 500 characters of RapidCarCheck’s raw response in your Render logs
+    console.log("🔍 RapidCarCheck raw response:", text.slice(0, 500));
 
     let parsed;
     try {
@@ -106,7 +106,7 @@ app.get("/api/full/:plate", async (req, res) => {
     const body = parsed.model_details?.body_details || {};
     const emissions = parsed.model_details?.emissions || {};
 
-    // Flattened object for frontend display
+    // Flattened data for frontend
     const flattened = {
       registrationNumber:
         v.vehicle_registration_mark || parsed.vrm || plate || null,
@@ -176,3 +176,4 @@ app.get("*", (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ SmartCheck server running on port ${PORT}`);
 });
+
