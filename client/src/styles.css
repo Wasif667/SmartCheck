@@ -77,3 +77,38 @@ pre {
   opacity: 0.8;
 }
 .footer a { color: #93c5fd; }
+
+.result {
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 20px;
+}
+
+.result h2 {
+  color: #93c5fd;
+  margin-bottom: 10px;
+}
+
+.result table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.result td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.result td:first-child {
+  color: #94a3b8;
+  width: 45%;
+}
+
+.footer {
+  margin-top: 20px;
+  font-size: 0.8em;
+  color: #9ca3af;
+  text-align: center;
+}
