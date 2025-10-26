@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server (Render-Ready, Flattened + Debug Logging)
+// SmartCheck Server (Render-Ready, Fixed RapidCarCheck Nested Structure)
 // ----------------------------
 
 import express from "express";
@@ -68,7 +68,7 @@ app.get("/api/check/:plate", async (req, res) => {
 });
 
 // ----------------------------
-// RapidCarCheck Full Vehicle Report (with debug log)
+// RapidCarCheck Full Vehicle Report (correctly handles nested data)
 // ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -81,7 +81,7 @@ app.get("/api/full/:plate", async (req, res) => {
     const response = await fetch(url);
     const text = await response.text();
 
-    // 👇 DEBUG LOG — this shows the first 500 characters of RapidCarCheck’s raw response in your Render logs
+    // 👇 Log what RapidCarCheck returns for debugging
     console.log("🔍 RapidCarCheck raw response:", text.slice(0, 500));
 
     let parsed;
@@ -95,56 +95,53 @@ app.get("/api/full/:plate", async (req, res) => {
       });
     }
 
-    // Extract nested objects safely
-    const v = parsed.vehicle_details?.vehicle_identification || {};
-    const c = parsed.vehicle_details?.colour_details || {};
-    const m = parsed.model_details?.model_data || {};
-    const perf = parsed.model_details?.performance?.power || {};
-    const torque = parsed.model_details?.performance?.torque || {};
-    const fuel = parsed.model_details?.fuel_economy || {};
-    const trans = parsed.model_details?.transmission || {};
-    const body = parsed.model_details?.body_details || {};
-    const emissions = parsed.model_details?.emissions || {};
+    // Navigate into the correct nested structure
+    const result = parsed?.data?.result || {};
 
-    // Flattened data for frontend
+    const v = result.vehicle_details?.vehicle_identification || {};
+    const c = result.vehicle_details?.colour_details || {};
+    const m = result.model_details?.model_data || {};
+    const perf = result.model_details?.performance?.power || {};
+    const torque = result.model_details?.performance?.torque || {};
+    const fuel = result.model_details?.fuel_economy || {};
+    const trans = result.model_details?.transmission || {};
+    const body = result.model_details?.body_details || {};
+    const emissions = result.model_details?.emissions || {};
+
+    // Flattened object for frontend display
     const flattened = {
       registrationNumber:
-        v.vehicle_registration_mark || parsed.vrm || plate || null,
+        v.vehicle_registration_mark || plate,
       make:
         v.dvla_manufacturer_desc ||
         m.manufacturer_desc ||
-        parsed.make ||
         null,
       model:
         v.dvla_model_desc ||
         m.model_desc ||
-        m.model_range_desc ||
-        parsed.model ||
         null,
-      colour: c.colour || v.dvla_colour_desc || null,
+      colour: c.colour || null,
       fuelType:
         v.dvla_fuel_desc ||
         m.ukvd_fuel_type_desc ||
-        m.fuel_type_desc ||
         null,
       engineCapacity:
         v.engine_capacity_cc ||
         m.engine_capacity_cc ||
-        perf.engine_capacity_cc ||
         null,
       transmission:
-        trans.transmission_type || m.transmission || "N/A",
+        trans.transmission_type || "N/A",
       powerBhp: perf.power_bhp || null,
       torqueNm: torque.torque_nm || null,
       topSpeedMph:
-        parsed.model_details?.performance?.statistics?.top_speed_mph || null,
+        result.model_details?.performance?.statistics?.top_speed_mph || null,
       co2: emissions.co2_gkm || null,
       mpg: fuel.combined_mpg || null,
-      financeOwed: parsed.financeOwed || false,
-      stolen: parsed.stolen || false,
-      writeOff: parsed.writeOff || false,
-      mileage: parsed.mileage || "N/A",
-      motExpiryDate: parsed.motExpiryDate || null,
+      financeOwed: result.financeOwed || false,
+      stolen: result.stolen || false,
+      writeOff: result.writeOff || false,
+      mileage: result.mileage || "N/A",
+      motExpiryDate: result.motExpiryDate || null,
       bodyType: body.ukvd_body_type_desc || null,
       doors: body.number_doors || null,
       seats: body.number_seats || null,
