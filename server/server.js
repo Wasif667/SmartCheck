@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
@@ -15,18 +14,14 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
+app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 
-// Allow frontend requests (CORS)
-const allowedOrigin = process.env.CORS_ORIGIN || "*";
-app.use(cors({ origin: allowedOrigin }));
-
-// --- Health check route ---
+// --- Health check ---
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "car-check-server", timestamp: new Date().toISOString() });
+  res.json({ ok: true, service: "car-check-server", time: new Date().toISOString() });
 });
 
-
-// --- DVLA Basic Check (Free API) ---
+// --- DVLA Basic Vehicle Check ---
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
 
@@ -35,9 +30,9 @@ app.get("/api/check/:plate", async (req, res) => {
       method: "POST",
       headers: {
         "x-api-key": process.env.DVLA_API_KEY,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ registrationNumber: plate })
+      body: JSON.stringify({ registrationNumber: plate }),
     });
 
     if (!response.ok) {
@@ -53,7 +48,6 @@ app.get("/api/check/:plate", async (req, res) => {
   }
 });
 
-
 // --- RapidCarCheck Full Vehicle Report ---
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -62,8 +56,8 @@ app.get("/api/full/:plate", async (req, res) => {
     const response = await fetch(`https://api.rapidcarcheck.co.uk/v1.0/vehicle?vrm=${plate}`, {
       headers: {
         "x-rapidapi-key": process.env.RAPIDCARCHECK_KEY,
-        "Accept": "application/json"
-      }
+        "Accept": "application/json",
+      },
     });
 
     if (!response.ok) {
@@ -76,3 +70,18 @@ app.get("/api/full/:plate", async (req, res) => {
   } catch (error) {
     console.error("RapidCarCheck fetch error:", error);
     res.status(500).json({ error: "Server error fetching RapidCarCheck data" });
+  }
+});
+
+// --- Serve React build (for Render) ---
+const publicDir = path.join(__dirname, "public");
+app.use(express.static(publicDir));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
+
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
+
