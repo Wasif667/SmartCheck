@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server
+// SmartCheck Server (Render-Ready)
 // ----------------------------
 
 import express from "express";
@@ -24,29 +24,38 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 // Health Check
 // ----------------------------
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "SmartCheck API", time: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: "SmartCheck API",
+    time: new Date().toISOString(),
+  });
 });
 
 // ----------------------------
-// DVLA Vehicle Check
+// DVLA Basic Vehicle Check
 // ----------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
 
   try {
-    const response = await fetch("https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles", {
-      method: "POST",
-      headers: {
-        "x-api-key": process.env.DVLA_API_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ registrationNumber: plate }),
-    });
+    const response = await fetch(
+      "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles",
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": process.env.DVLA_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ registrationNumber: plate }),
+      }
+    );
 
     if (!response.ok) {
       const text = await response.text();
       console.error("DVLA API error:", text);
-      res.status(response.status).json({ error: "DVLA API error", details: text });
+      res
+        .status(response.status)
+        .json({ error: "DVLA API error", details: text });
       return;
     }
 
@@ -54,12 +63,15 @@ app.get("/api/check/:plate", async (req, res) => {
     res.json(data);
   } catch (error) {
     console.error("DVLA fetch error:", error);
-    res.status(500).json({ error: "Server error fetching DVLA data", details: error.message });
+    res.status(500).json({
+      error: "Server error fetching DVLA data",
+      details: error.message,
+    });
   }
 });
 
 // ----------------------------
-// RapidCarCheck Full Vehicle Report (Direct API)
+// RapidCarCheck Full Vehicle Report (Flexible Parser)
 // ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -67,27 +79,49 @@ app.get("/api/full/:plate", async (req, res) => {
   try {
     const apiKey = process.env.RAPIDCARCHECK_KEY;
     const domain = "https://smartcheck-9o2u.onrender.com"; // your Render domain
-    const url = `https://www.rapidcarcheck.co.uk/api/?key=${apiKey}&pro=1&domain=${domain}&plate=${plate}`;
+    const url = `https://www.rapidcarcheck.co.uk/api/?key=${apiKey}&pro=1&json=1&domain=${domain}&plate=${plate}`;
 
     const response = await fetch(url);
+    const raw = await response.text();
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("RapidCarCheck API error:", text);
-      res.status(response.status).json({
-        error: "RapidCarCheck API error",
-        details: text
-      });
-      return;
+    console.log("🔍 RapidCarCheck raw response:", raw.slice(0, 300));
+
+    // Attempt to parse JSON first
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Fallback: clean HTML or plain text
+      const clean = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      parsed = { message: clean || "Unexpected response from RapidCarCheck" };
     }
 
-    const data = await response.json();
+    // Normalize keys to match frontend expectations
+    const data = {
+      vrm: parsed.vrm || parsed.registration || parsed.plate || null,
+      make: parsed.make || parsed.Make || null,
+      model: parsed.model || parsed.Model || null,
+      colour:
+        parsed.colour || parsed.Color || parsed.colour_name || parsed.Colour || null,
+      fuelType: parsed.fuelType || parsed.FuelType || null,
+      engineCapacity: parsed.engineCapacity || parsed.EngineSize || null,
+      transmission: parsed.transmission || parsed.Transmission || null,
+      financeOwed:
+        parsed.financeOwed || parsed.FinanceOwed || parsed.finance || false,
+      stolen: parsed.stolen || parsed.Stolen || false,
+      writeOff: parsed.writeOff || parsed.WriteOff || false,
+      mileage: parsed.mileage || parsed.Mileage || null,
+      motExpiryDate: parsed.motExpiryDate || parsed.MOT_Expiry || null,
+      message: parsed.message || null,
+      raw: parsed, // keep original payload for debugging
+    };
+
     res.json(data);
   } catch (error) {
     console.error("RapidCarCheck fetch error:", error);
     res.status(500).json({
       error: "Server error fetching RapidCarCheck data",
-      details: error.message
+      details: error.message,
     });
   }
 });
@@ -108,3 +142,4 @@ app.get("*", (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ SmartCheck server running on port ${PORT}`);
 });
+
