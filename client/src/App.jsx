@@ -94,10 +94,22 @@ export default function App() {
       ---------------------------- */}
       {basicData && (
         <div className="section">
-          <h2>DVLA Basic Vehicle Data</h2>
-          {Object.entries(basicData).map(([key, val]) =>
-            renderRow(key, val)
-          )}
+          <h2>DVLA Simple Vehicle Check</h2>
+          {renderRow("Registration", basicData.registration)}
+          {renderRow("Make", basicData.make)}
+          {renderRow("Model", basicData.model)}
+          {renderRow("Colour", basicData.colour)}
+          {renderRow("Fuel Type", basicData.fuelType)}
+          {renderRow("Engine Size (cc)", basicData.engineSize)}
+          {renderRow("Transmission", basicData.transmission)}
+          {renderRow("Body Type", basicData.bodyType)}
+          {renderRow("Year of Manufacture", basicData.yearOfManufacture)}
+          {renderRow("CO₂ Emissions (g/km)", basicData.co2Emissions)}
+          {renderRow("Tax Due Date", basicData.taxDueDate)}
+          {renderRow("Tax Status", basicData.taxStatus)}
+          {renderRow("MOT Status", basicData.motStatus)}
+          {renderRow("MOT Expiry Date", basicData.motExpiryDate)}
+          {renderRow("Date of Last V5C Issued", basicData.dateOfLastV5CIssued)}
         </div>
       )}
 
