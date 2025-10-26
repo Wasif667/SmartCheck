@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server (Render-Ready)
+// SmartCheck Server (Render-Ready, Full Data)
 // ----------------------------
 
 import express from "express";
@@ -32,7 +32,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // ----------------------------
-// DVLA Basic Vehicle Check
+// DVLA Vehicle Check
 // ----------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -53,9 +53,7 @@ app.get("/api/check/:plate", async (req, res) => {
     if (!response.ok) {
       const text = await response.text();
       console.error("DVLA API error:", text);
-      res
-        .status(response.status)
-        .json({ error: "DVLA API error", details: text });
+      res.status(response.status).json({ error: "DVLA API error", details: text });
       return;
     }
 
@@ -71,7 +69,7 @@ app.get("/api/check/:plate", async (req, res) => {
 });
 
 // ----------------------------
-// RapidCarCheck Full Vehicle Report (Flexible Parser)
+// RapidCarCheck Full Vehicle Report
 // ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -82,41 +80,17 @@ app.get("/api/full/:plate", async (req, res) => {
     const url = `https://www.rapidcarcheck.co.uk/api/?key=${apiKey}&pro=1&json=1&domain=${domain}&plate=${plate}`;
 
     const response = await fetch(url);
-    const raw = await response.text();
+    const text = await response.text();
 
-    console.log("🔍 RapidCarCheck raw response:", raw.slice(0, 300));
-
-    // Attempt to parse JSON first
     let parsed;
     try {
-      parsed = JSON.parse(raw);
+      parsed = JSON.parse(text);
     } catch {
-      // Fallback: clean HTML or plain text
-      const clean = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-      parsed = { message: clean || "Unexpected response from RapidCarCheck" };
+      const clean = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      parsed = { error: "Unexpected response", details: clean.slice(0, 300) };
     }
 
-    // Normalize keys to match frontend expectations
-    const data = {
-      vrm: parsed.vrm || parsed.registration || parsed.plate || null,
-      make: parsed.make || parsed.Make || null,
-      model: parsed.model || parsed.Model || null,
-      colour:
-        parsed.colour || parsed.Color || parsed.colour_name || parsed.Colour || null,
-      fuelType: parsed.fuelType || parsed.FuelType || null,
-      engineCapacity: parsed.engineCapacity || parsed.EngineSize || null,
-      transmission: parsed.transmission || parsed.Transmission || null,
-      financeOwed:
-        parsed.financeOwed || parsed.FinanceOwed || parsed.finance || false,
-      stolen: parsed.stolen || parsed.Stolen || false,
-      writeOff: parsed.writeOff || parsed.WriteOff || false,
-      mileage: parsed.mileage || parsed.Mileage || null,
-      motExpiryDate: parsed.motExpiryDate || parsed.MOT_Expiry || null,
-      message: parsed.message || null,
-      raw: parsed, // keep original payload for debugging
-    };
-
-    res.json(data);
+    res.json(parsed);
   } catch (error) {
     console.error("RapidCarCheck fetch error:", error);
     res.status(500).json({
@@ -127,7 +101,7 @@ app.get("/api/full/:plate", async (req, res) => {
 });
 
 // ----------------------------
-// Serve React Frontend (Production)
+// Serve React Frontend
 // ----------------------------
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir));
