@@ -1,65 +1,129 @@
-
-import React, { useState } from 'react'
+import React, { useState } from "react";
 
 export default function App() {
-  const [reg, setReg] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
+  const [reg, setReg] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [basicData, setBasicData] = useState(null);
+  const [fullData, setFullData] = useState(null);
 
-  async function handleCheck(e) {
-    e.preventDefault()
-    setError(null)
-    setData(null)
+  // --- Basic DVLA check ---
+  async function handleBasicCheck() {
+    if (!reg.trim()) return alert("Enter a registration number");
 
-    const trimmed = reg.trim().toUpperCase()
-    if (!trimmed) {
-      setError('Please enter a registration number.')
-      return
-    }
-    setLoading(true)
+    setLoading(true);
+    setError(null);
+    setFullData(null);
+
     try {
-      const res = await fetch(`/api/check/${encodeURIComponent(trimmed)}`)
-      const json = await res.json()
-      if (!res.ok) {
-        throw new Error(json?.error || 'Lookup failed')
-      }
-      setData(json)
+      const res = await fetch(`/api/check/${reg.trim().toUpperCase()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Vehicle not found");
+      setBasicData(data);
     } catch (err) {
-      setError(err.message || 'Something went wrong')
+      setError(err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
+    }
+  }
+
+  // --- Full RapidCarCheck ---
+  async function handleFullCheck() {
+    if (!reg.trim()) return alert("Enter a registration number");
+
+    setLoading(true);
+    setError(null);
+    setBasicData(null);
+
+    try {
+      const res = await fetch(`/api/full/${reg.trim().toUpperCase()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Full report not found");
+      setFullData(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <div className="card">
-      <h1>UK Car Check</h1>
-      <div className="meta">Enter a UK number plate to get basic DVLA details.</div>
-      <form onSubmit={handleCheck} className="formRow">
+      <h1>Smart Car Check</h1>
+      <p>Enter a UK registration number to view DVLA or full vehicle data.</p>
+
+      <div className="formRow">
         <input
           placeholder="AB12CDE"
           value={reg}
-          onChange={(e) => setReg(e.target.value)}
-          autoFocus
+          onChange={(e) => setReg(e.target.value.toUpperCase())}
+          maxLength={8}
         />
-        <button type="submit" disabled={loading}>
-          {loading ? 'Checking…' : 'Check'}
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", marginBottom: "1em" }}>
+        <button onClick={handleBasicCheck} disabled={loading}>
+          {loading ? "Checking..." : "Basic Check (DVLA)"}
         </button>
-      </form>
+        <button
+          onClick={handleFullCheck}
+          disabled={loading}
+          style={{ background: "#16a34a" }}
+        >
+          {loading ? "Fetching..." : "Full Vehicle Check"}
+        </button>
+      </div>
 
-      {error && <div style={{ color: '#fca5a5', marginBottom: 12 }}>{error}</div>}
+      {error && <div style={{ color: "#f87171" }}>⚠️ {error}</div>}
 
-      {data && (
-        <>
-          <h3>Result</h3>
-          <pre>{JSON.stringify(data, null, 2)}</pre>
-        </>
+      {/* --- DVLA Basic Info --- */}
+      {basicData && (
+        <div className="result">
+          <h2>Basic DVLA Information</h2>
+          <table>
+            <tbody>
+              <tr><td>Registration:</td><td>{basicData.registrationNumber}</td></tr>
+              <tr><td>Make:</td><td>{basicData.make}</td></tr>
+              <tr><td>Model:</td><td>{basicData.model}</td></tr>
+              <tr><td>Colour:</td><td>{basicData.colour}</td></tr>
+              <tr><td>Fuel Type:</td><td>{basicData.fuelType}</td></tr>
+              <tr><td>Year of Manufacture:</td><td>{basicData.yearOfManufacture}</td></tr>
+              <tr><td>Tax Status:</td><td>{basicData.taxStatus}</td></tr>
+              <tr><td>MOT Status:</td><td>{basicData.motStatus}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* --- Full RapidCarCheck Info --- */}
+      {fullData && (
+        <div className="result">
+          <h2>Full Vehicle Report</h2>
+          <table>
+            <tbody>
+              <tr><td>Registration:</td><td>{fullData.vrm}</td></tr>
+              <tr><td>Make:</td><td>{fullData.make}</td></tr>
+              <tr><td>Model:</td><td>{fullData.model}</td></tr>
+              <tr><td>Colour:</td><td>{fullData.colour}</td></tr>
+              <tr><td>Engine Size:</td><td>{fullData.engineCapacity} cc</td></tr>
+              <tr><td>Fuel Type:</td><td>{fullData.fuelType}</td></tr>
+              <tr><td>Transmission:</td><td>{fullData.transmission}</td></tr>
+              <tr><td>Finance Owed:</td><td>{fullData.financeOwed ? "⚠️ Yes" : "✅ Clear"}</td></tr>
+              <tr><td>Stolen:</td><td>{fullData.stolen ? "⚠️ Yes" : "✅ No"}</td></tr>
+              <tr><td>Written Off:</td><td>{fullData.writeOff ? "⚠️ Yes" : "✅ No"}</td></tr>
+              <tr><td>Mileage:</td><td>{fullData.mileage || "N/A"}</td></tr>
+            </tbody>
+          </table>
+
+          {fullData.motExpiryDate && (
+            <p>MOT Expiry: <strong>{fullData.motExpiryDate}</strong></p>
+          )}
+        </div>
       )}
 
       <div className="footer">
-        Data source: DVLA Vehicle Enquiry API. <a href="https://developer-portal.vehicleenquiry.service.gov.uk/" target="_blank" rel="noreferrer">Get an API key</a>.
+        Data sources: DVLA Vehicle Enquiry API & RapidCarCheck API
       </div>
     </div>
-  )
+  );
 }
