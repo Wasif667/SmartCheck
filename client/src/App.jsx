@@ -8,7 +8,7 @@ export default function App() {
   const [basicData, setBasicData] = useState(null);
   const [fullData, setFullData] = useState(null);
 
-  // Basic DVLA check
+  // ---------- Basic DVLA Check ----------
   async function handleBasicCheck() {
     if (!reg.trim()) return alert("Please enter a registration number");
     setLoading(true);
@@ -27,7 +27,7 @@ export default function App() {
     }
   }
 
-  // RapidCarCheck full report
+  // ---------- Full RapidCarCheck ----------
   async function handleFullCheck() {
     if (!reg.trim()) return alert("Please enter a registration number");
     setLoading(true);
@@ -46,46 +46,15 @@ export default function App() {
     }
   }
 
-  // Helper: render nested data as tables
-  const renderSection = (title, obj) => {
-    if (!obj || typeof obj !== "object") return null;
+  // ---------- Helper: render rows ----------
+  const renderRow = (label, value) => {
+    if (value === null || value === undefined || value === "")
+      return null;
     return (
-      <div className="section">
-        <h3>{title}</h3>
-        <table>
-          <tbody>
-            {Object.entries(obj).map(([key, value]) => {
-              if (Array.isArray(value)) {
-                return (
-                  <tr key={key}>
-                    <td colSpan={2}>
-                      <strong>{key.replace(/_/g, " ")}</strong>
-                      {value.map((v, i) => (
-                        <div key={i} className="subsection">
-                          {renderSection(`${key} #${i + 1}`, v)}
-                        </div>
-                      ))}
-                    </td>
-                  </tr>
-                );
-              } else if (typeof value === "object" && value !== null) {
-                return (
-                  <tr key={key}>
-                    <td colSpan={2}>{renderSection(key.replace(/_/g, " "), value)}</td>
-                  </tr>
-                );
-              } else {
-                return (
-                  <tr key={key}>
-                    <td>{key.replace(/_/g, " ")}</td>
-                    <td>{String(value)}</td>
-                  </tr>
-                );
-              }
-            })}
-          </tbody>
-        </table>
-      </div>
+      <tr>
+        <td>{label}</td>
+        <td>{String(value)}</td>
+      </tr>
     );
   };
 
@@ -118,29 +87,68 @@ export default function App() {
 
       {error && <div className="error">⚠️ {error}</div>}
 
+      {/* ---------- Basic DVLA Result ---------- */}
       {basicData && (
         <div className="result">
-          <h2>Basic DVLA Information</h2>
-          {renderSection("DVLA Vehicle Data", basicData)}
+          <h2>Basic DVLA Vehicle Data</h2>
+          <table>
+            <tbody>
+              {Object.entries(basicData).map(([key, value]) => renderRow(key, value))}
+            </tbody>
+          </table>
         </div>
       )}
 
+      {/* ---------- Full RapidCarCheck Result ---------- */}
       {fullData && (
         <div className="result">
           <h2>Full Vehicle Report (RapidCarCheck)</h2>
-          {fullData.vehicle_details &&
-            renderSection("Vehicle Details", fullData.vehicle_details)}
-          {fullData.model_details &&
-            renderSection("Model Details", fullData.model_details)}
-          {fullData.vehicle_history &&
-            renderSection("Vehicle History", fullData.vehicle_history)}
-          {renderSection("Other Data", fullData)}
+          <table>
+            <tbody>
+              {renderRow("Registration", fullData.registrationNumber)}
+              {renderRow("Make", fullData.make)}
+              {renderRow("Model", fullData.model)}
+              {renderRow("Colour", fullData.colour)}
+              {renderRow("Fuel Type", fullData.fuelType)}
+              {renderRow(
+                "Engine Size",
+                fullData.engineCapacity
+                  ? `${fullData.engineCapacity} cc`
+                  : "N/A"
+              )}
+              {renderRow("Transmission", fullData.transmission)}
+              {renderRow(
+                "Power",
+                fullData.powerBhp ? `${fullData.powerBhp} bhp` : "N/A"
+              )}
+              {renderRow(
+                "Torque",
+                fullData.torqueNm ? `${fullData.torqueNm} Nm` : "N/A"
+              )}
+              {renderRow(
+                "Top Speed",
+                fullData.topSpeedMph ? `${fullData.topSpeedMph} mph` : "N/A"
+              )}
+              {renderRow("MPG", fullData.mpg)}
+              {renderRow("CO₂ (g/km)", fullData.co2)}
+              {renderRow("Body Type", fullData.bodyType)}
+              {renderRow("Doors", fullData.doors)}
+              {renderRow("Seats", fullData.seats)}
+              {renderRow(
+                "Finance Owed",
+                fullData.financeOwed ? "❌ Yes" : "✅ Clear"
+              )}
+              {renderRow("Stolen", fullData.stolen ? "❌ Yes" : "✅ No")}
+              {renderRow("Written Off", fullData.writeOff ? "❌ Yes" : "✅ No")}
+              {renderRow("Mileage", fullData.mileage)}
+              {renderRow("MOT Expiry", fullData.motExpiryDate)}
+            </tbody>
+          </table>
         </div>
       )}
 
-      <div className="footer">Data from DVLA & RapidCarCheck APIs</div>
+      <div className="footer">Data provided by DVLA & RapidCarCheck APIs</div>
     </div>
   );
 }
-
 
