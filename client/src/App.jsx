@@ -7,6 +7,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [basic, setBasic] = useState(null);
   const [full, setFull] = useState(null);
+  const [showRaw, setShowRaw] = useState(false); // 👈 NEW: toggle for raw JSON
+  const [rawData, setRawData] = useState(null); // 👈 NEW: store raw JSON
 
   const runCheck = async (type) => {
     if (!reg.trim()) return alert("Please enter a registration number");
@@ -14,6 +16,7 @@ export default function App() {
     setError(null);
     setBasic(null);
     setFull(null);
+    setShowRaw(false);
 
     try {
       const res = await fetch(`/api/${type}/${reg.trim().toUpperCase()}`);
@@ -22,6 +25,8 @@ export default function App() {
 
       if (type === "check") setBasic(data);
       if (type === "full") setFull(data);
+
+      setRawData(data); // 👈 Save raw response
     } catch (e) {
       console.error(e);
       setError(e.message);
@@ -35,6 +40,13 @@ export default function App() {
     if (typeof value === "boolean") return value ? "✅ Yes" : "❌ No";
     return value;
   };
+
+  const formatLabel = (key) =>
+    key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
 
   const Section = ({ title, data }) => {
     if (!data) return null;
@@ -79,13 +91,6 @@ export default function App() {
       </div>
     );
   };
-
-  const formatLabel = (key) =>
-    key
-      .replace(/([A-Z])/g, " $1")
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-      .trim();
 
   return (
     <div className="app">
@@ -150,9 +155,7 @@ export default function App() {
         {/* Results */}
         {!loading && (
           <>
-            {basic && (
-              <Section title="Simple Check (DVLA)" data={basic} />
-            )}
+            {basic && <Section title="Simple Check (DVLA)" data={basic} />}
 
             {full && (
               <>
@@ -166,6 +169,23 @@ export default function App() {
                 <Section title="Search History" data={full.searches} />
                 <Section title="Technical Details" data={full.technical} />
               </>
+            )}
+
+            {/* 👇 NEW: Raw JSON toggle */}
+            {rawData && (
+              <div className="raw-section">
+                <button
+                  className="btn ghost"
+                  onClick={() => setShowRaw((v) => !v)}
+                >
+                  {showRaw ? "🙈 Hide Raw Data" : "👀 Show Raw Data"}
+                </button>
+                {showRaw && (
+                  <pre className="raw-json">
+                    {JSON.stringify(rawData, null, 2)}
+                  </pre>
+                )}
+              </div>
             )}
           </>
         )}
