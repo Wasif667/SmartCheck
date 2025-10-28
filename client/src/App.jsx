@@ -5,28 +5,22 @@ export default function App() {
   const [reg, setReg] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [basic, setBasic] = useState(null);
-  const [full, setFull] = useState(null);
-  const [showRaw, setShowRaw] = useState(false); // 👈 NEW: toggle for raw JSON
-  const [rawData, setRawData] = useState(null); // 👈 NEW: store raw JSON
+  const [result, setResult] = useState(null);
+  const [showRaw, setShowRaw] = useState(false);
 
   const runCheck = async (type) => {
     if (!reg.trim()) return alert("Please enter a registration number");
     setLoading(true);
     setError(null);
-    setBasic(null);
-    setFull(null);
-    setShowRaw(false);
+    setResult(null);
 
     try {
       const res = await fetch(`/api/${type}/${reg.trim().toUpperCase()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Request failed");
 
-      if (type === "check") setBasic(data);
-      if (type === "full") setFull(data);
-
-      setRawData(data); // 👈 Save raw response
+      console.log("✅ API Response:", data);
+      setResult(data);
     } catch (e) {
       console.error(e);
       setError(e.message);
@@ -35,10 +29,36 @@ export default function App() {
     }
   };
 
-  const formatValue = (value) => {
-    if (value === null || value === undefined || value === "") return "—";
-    if (typeof value === "boolean") return value ? "✅ Yes" : "❌ No";
-    return value;
+  // 🔹 Safely render any object (even deeply nested)
+  const renderObject = (obj) => {
+    if (!obj) return <p className="muted">No data available</p>;
+
+    if (typeof obj !== "object") {
+      return <span>{String(obj)}</span>;
+    }
+
+    if (Array.isArray(obj)) {
+      return (
+        <div className="array-section">
+          {obj.map((item, i) => (
+            <div key={i} className="array-item">
+              {renderObject(item)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid">
+        {Object.entries(obj).map(([key, value]) => (
+          <div key={key} className="kv">
+            <div className="kv-label">{formatLabel(key)}</div>
+            <div className="kv-value">{renderObject(value)}</div>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const formatLabel = (key) =>
@@ -47,50 +67,6 @@ export default function App() {
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase())
       .trim();
-
-  const Section = ({ title, data }) => {
-    if (!data) return null;
-    if (Array.isArray(data) && data.length === 0) return null;
-
-    return (
-      <div className="card">
-        <div className="card-header">
-          <h2>{title}</h2>
-        </div>
-        <div className="card-body">
-          {Array.isArray(data) ? (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {Object.keys(data[0] || {}).map((key) => (
-                    <th key={key}>{formatLabel(key)}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((item, idx) => (
-                  <tr key={idx}>
-                    {Object.values(item).map((val, i) => (
-                      <td key={i}>{formatValue(val)}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="grid">
-              {Object.entries(data).map(([key, val]) => (
-                <div key={key} className="kv">
-                  <div className="kv-label">{formatLabel(key)}</div>
-                  <div className="kv-value">{formatValue(val)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="app">
@@ -105,7 +81,7 @@ export default function App() {
         <button
           className="btn ghost"
           onClick={() => window.print()}
-          disabled={!basic && !full}
+          disabled={!result}
         >
           ⬇️ Download PDF
         </button>
@@ -114,7 +90,7 @@ export default function App() {
       <main className="content">
         <section className="search no-print">
           <h1>Smart Vehicle Check</h1>
-          <p className="subtitle">Enter your registration to begin</p>
+          <p className="subtitle">Enter a registration to begin</p>
 
           <div className="search-bar">
             <input
@@ -148,51 +124,39 @@ export default function App() {
         {loading && (
           <div className="loading">
             <div className="spinner"></div>
-            <p>Fetching data…</p>
+            <p>Fetching vehicle data…</p>
           </div>
         )}
 
-        {/* Results */}
-        {!loading && (
-          <>
-            {basic && <Section title="Simple Check (DVLA)" data={basic} />}
-
-            {full && (
-              <>
-                <Section title="Summary" data={full.summary} />
-                <Section title="Finance" data={full.finance} />
-                <Section title="Keepers" data={full.keepers} />
-                <Section title="Plate History" data={full.plateHistory} />
-                <Section title="Condition" data={full.condition} />
-                <Section title="Stolen Records" data={full.stolen} />
-                <Section title="Colour Changes" data={full.colourChanges} />
-                <Section title="Search History" data={full.searches} />
-                <Section title="Technical Details" data={full.technical} />
-              </>
-            )}
-
-            {/* 👇 NEW: Raw JSON toggle */}
-            {rawData && (
-              <div className="raw-section">
-                <button
-                  className="btn ghost"
-                  onClick={() => setShowRaw((v) => !v)}
-                >
-                  {showRaw ? "🙈 Hide Raw Data" : "👀 Show Raw Data"}
-                </button>
-                {showRaw && (
-                  <pre className="raw-json">
-                    {JSON.stringify(rawData, null, 2)}
-                  </pre>
-                )}
-              </div>
-            )}
-          </>
+        {!loading && result && (
+          <div className="card">
+            <div className="card-header">
+              <h2>Vehicle Check Results</h2>
+            </div>
+            <div className="card-body">{renderObject(result)}</div>
+          </div>
         )}
 
-        {!loading && !basic && !full && (
+        {!loading && !result && (
           <div className="empty">
             <p>Start by entering a registration above 👆</p>
+          </div>
+        )}
+
+        {/* 👇 Show Raw JSON toggle */}
+        {result && (
+          <div className="raw-section">
+            <button
+              className="btn ghost"
+              onClick={() => setShowRaw((v) => !v)}
+            >
+              {showRaw ? "🙈 Hide Raw Data" : "👀 Show Raw Data"}
+            </button>
+            {showRaw && (
+              <pre className="raw-json">
+                {JSON.stringify(result, null, 2)}
+              </pre>
+            )}
           </div>
         )}
       </main>
@@ -203,3 +167,4 @@ export default function App() {
     </div>
   );
 }
+
