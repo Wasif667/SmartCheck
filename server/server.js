@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server (DVLA + RapidCarCheck, Fully Fixed)
+// SmartCheck Server (DVLA + OneAutoAPI Integration)
 // ----------------------------
 
 import express from "express";
@@ -24,15 +24,11 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 // Health Check
 // ----------------------------
 app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    service: "SmartCheck API",
-    time: new Date().toISOString(),
-  });
+  res.json({ ok: true, service: "SmartCheck API", time: new Date().toISOString() });
 });
 
 // ----------------------------
-// ✅ Simple DVLA Vehicle Check
+// ✅ DVLA Simple Check
 // ----------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -78,125 +74,89 @@ app.get("/api/check/:plate", async (req, res) => {
     res.json(cleaned);
   } catch (error) {
     console.error("DVLA fetch error:", error);
-    res.status(500).json({
-      error: "Server error fetching DVLA data",
-      details: error.message,
-    });
+    res.status(500).json({ error: "Server error fetching DVLA data", details: error.message });
   }
 });
 
 // ----------------------------
-// ⚡ RapidCarCheck - Full Vehicle Check (Flexible Parsing)
+// ⚡ OneAutoAPI Premium Check
 // ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
+  const apiKey = process.env.ONEAUTO_API_KEY;
 
   try {
-    const apiKey = process.env.RAPIDCARCHECK_KEY;
-    const domain = "https://smartcheck-9o2u.onrender.com";
-    const url = `https://www.rapidcarcheck.co.uk/api/?key=${apiKey}&pro=1&json=1&domain=${domain}&plate=${plate}`;
+    const response = await fetch(
+      `https://api.oneautoapi.co.uk/vehicle?registration=${plate}`,
+      {
+        headers: {
+          "x-api-key": apiKey,
+        },
+      }
+    );
 
-    const response = await fetch(url);
     const text = await response.text();
+    console.log("🔍 OneAutoAPI raw response:", text.slice(0, 400));
 
-    console.log("🔍 RapidCarCheck raw:", text.slice(0, 500));
-
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      const clean = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-      return res.status(500).json({
-        error: "RapidCarCheck returned non-JSON data",
-        details: clean.slice(0, 300),
-      });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "OneAutoAPI error", details: text });
     }
 
-    const result = parsed?.data?.result || {};
-    const v = result.vehicle_details?.vehicle_identification || {};
-    const c = result.vehicle_details?.colour_details || {};
-    const m = result.model_details?.model_data || {};
-    const perf = result.model_details?.performance || {};
-    const fuel = result.model_details?.fuel_economy || {};
-    const body = result.model_details?.body_details || {};
-    const emissions = result.model_details?.emissions || {};
-    const weights = result.model_details?.weights || {};
-    const dims = result.model_details?.dimensions || {};
-    const trans = result.model_details?.transmission || {};
-    const keepers = result.vehicle_details?.keeper_change_list || [];
-    const plates = result.vehicle_details?.plate_change_list || [];
+    const data = JSON.parse(text);
 
-    // 🧹 Clean and format output — ensures consistent key/value pairs
+    // 🧩 Map and clean output
+    const v = data.vehicle || {};
+    const tax = data.tax || {};
+    const mot = data.mot || {};
+    const tech = data.technical || {};
+    const perf = data.performance || {};
+    const dims = data.dimensions || {};
+    const history = data.history || {};
+
     const grouped = {
       summary: {
-        registration: v.vehicle_registration_mark || plate,
-        make: v.dvla_manufacturer_desc || m.manufacturer_desc || "N/A",
-        model: v.dvla_model_desc || m.model_desc || "N/A",
-        colour: c.colour || "N/A",
-        fuelType: v.dvla_fuel_desc || m.ukvd_fuel_type_desc || "N/A",
-        engineSize: v.engine_capacity_cc || m.engine_capacity_cc || "N/A",
-        transmission: trans.transmission_type || "N/A",
-        co2: emissions.co2_gkm || "N/A",
-        mpg: fuel.combined_mpg || "N/A",
-        doors: body.number_doors || "N/A",
-        seats: body.number_seats || "N/A",
-      },
-
-      history: {
-        financeOwed:
-          result.finance_details?.is_finance_active ||
-          result.financeOwed ||
-          false,
-        stolen:
-          result.stolen_details?.is_stolen ||
-          result.is_stolen ||
-          false,
-        writeOff:
-          result.insurance_writeoff_details?.is_writeoff ||
-          result.writeOff ||
-          false,
-        mileage:
-          result.mileage || result.odometer_reading || "N/A",
-        previousKeepers: Array.isArray(keepers)
-          ? keepers.map((k) => ({
-              number: k.number_previous_keepers,
-              date: k.date_of_last_keeper_change,
-            }))
-          : [],
-        plateChanges: Array.isArray(plates)
-          ? plates.map((p) => ({
-              from: p.previous_vehicle_registration_mark,
-              to: p.current_vehicle_registration_mark,
-              date: p.cherished_plate_transfer_date,
-            }))
-          : [],
-      },
-
-      performance: {
-        powerBhp: perf?.power?.power_bhp || "N/A",
-        torqueNm: perf?.torque?.torque_nm || "N/A",
-        topSpeedMph: perf?.statistics?.top_speed_mph || "N/A",
-        acceleration: perf?.statistics?.["0to60_mph"] || "N/A",
+        registration: v.registration || plate,
+        make: v.make || "N/A",
+        model: v.model || "N/A",
+        colour: v.colour || "N/A",
+        fuelType: v.fuelType || "N/A",
+        engineSize: v.engineSize || "N/A",
+        transmission: v.transmission || "N/A",
+        bodyType: v.bodyType || "N/A",
+        yearOfManufacture: v.yearOfManufacture || "N/A",
+        co2Emissions: tech.co2Emissions || "N/A",
+        taxStatus: tax.status || "N/A",
+        motStatus: mot.status || "N/A",
+        motExpiry: mot.expiryDate || "N/A",
       },
 
       technical: {
-        vin: v.vehicle_identification_number || "N/A",
-        engineNumber: v.engine_number || "N/A",
-        bodyType: body.ukvd_body_type_desc || "N/A",
-        wheelplan: v.dvla_wheelplan || "N/A",
-        length: dims.vehicle_length_mm || "N/A",
-        width: dims.vehicle_width_mm || "N/A",
-        height: dims.vehicle_height_mm || "N/A",
-        kerbWeight: weights.min_kerbweight_kg || "N/A",
-        grossWeight: weights.gross_vehicleweight_kg || "N/A",
+        vin: tech.vin || "N/A",
+        powerBhp: perf.powerBhp || "N/A",
+        torqueNm: perf.torqueNm || "N/A",
+        topSpeedMph: perf.topSpeedMph || "N/A",
+        acceleration: perf.zeroToSixty || "N/A",
+        weightKg: tech.weight || "N/A",
+        lengthMm: dims.length || "N/A",
+        widthMm: dims.width || "N/A",
+        heightMm: dims.height || "N/A",
+      },
+
+      history: {
+        previousKeepers: history.previousKeepers || "N/A",
+        plateChanges: history.plateChanges || "N/A",
+        writeOff: history.writeOff || false,
+        finance: history.financeOwed || false,
+        stolen: history.stolen || false,
+        mileage: history.mileage || "N/A",
       },
     };
 
     res.json(grouped);
   } catch (error) {
-    console.error("RapidCarCheck fetch error:", error);
+    console.error("OneAutoAPI fetch error:", error);
     res.status(500).json({
-      error: "Server error fetching RapidCarCheck data",
+      error: "Server error fetching OneAutoAPI data",
       details: error.message,
     });
   }
@@ -209,7 +169,5 @@ const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir));
 app.get("*", (_, res) => res.sendFile(path.join(publicDir, "index.html")));
 
-// ----------------------------
-app.listen(PORT, () =>
-  console.log(`✅ SmartCheck server running on port ${PORT}`)
-);
+app.listen(PORT, () => console.log(`✅ SmartCheck running on port ${PORT}`));
+
