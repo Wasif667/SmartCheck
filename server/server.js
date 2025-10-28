@@ -1,5 +1,5 @@
 // ----------------------------
-// SmartCheck Server (DVLA + OneAutoAPI Integration)
+// SmartCheck Server (DVLA + OneAutoAPI Experian AutoCheck v3)
 // ----------------------------
 
 import express from "express";
@@ -21,14 +21,14 @@ app.use(express.json());
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 
 // ----------------------------
-// Health Check
+// Health
 // ----------------------------
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "SmartCheck API", time: new Date().toISOString() });
 });
 
 // ----------------------------
-// ✅ DVLA Simple Check
+// ✅ Simple DVLA Check
 // ----------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
@@ -52,7 +52,6 @@ app.get("/api/check/:plate", async (req, res) => {
     }
 
     const data = JSON.parse(text);
-
     const cleaned = {
       registration: data.registrationNumber || plate,
       make: data.make || null,
@@ -70,7 +69,6 @@ app.get("/api/check/:plate", async (req, res) => {
       motExpiryDate: data.motExpiryDate || null,
       dateOfLastV5CIssued: data.dateOfLastV5CIssued || null,
     };
-
     res.json(cleaned);
   } catch (error) {
     console.error("DVLA fetch error:", error);
@@ -79,21 +77,24 @@ app.get("/api/check/:plate", async (req, res) => {
 });
 
 // ----------------------------
-// ⚡ OneAutoAPI Premium Check
+// ⚡ OneAutoAPI Experian AutoCheck Premium Check
 // ----------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
   const apiKey = process.env.ONEAUTO_API_KEY;
 
+  if (!apiKey) {
+    return res.status(500).json({ error: "Missing OneAutoAPI key" });
+  }
+
+  const url = `https://api.oneautoapi.com/experian/autocheck/v3?vehicle_registration_mark=${plate}`;
+
   try {
-    const response = await fetch(
-      `https://api.oneautoapi.co.uk/vehicle?registration=${plate}`,
-      {
-        headers: {
-          "x-api-key": apiKey,
-        },
-      }
-    );
+    console.log("🌐 Fetching OneAutoAPI:", url);
+
+    const response = await fetch(url, {
+      headers: { "x-api-key": apiKey },
+    });
 
     const text = await response.text();
     console.log("🔍 OneAutoAPI raw response:", text.slice(0, 400));
@@ -103,67 +104,86 @@ app.get("/api/full/:plate", async (req, res) => {
     }
 
     const data = JSON.parse(text);
+    const result = data.result || {};
 
-    // 🧩 Map and clean output
-    const v = data.vehicle || {};
-    const tax = data.tax || {};
-    const mot = data.mot || {};
-    const tech = data.technical || {};
-    const perf = data.performance || {};
-    const dims = data.dimensions || {};
-    const history = data.history || {};
-
+    // 🧹 Clean + map response
     const grouped = {
       summary: {
-        registration: v.registration || plate,
-        make: v.make || "N/A",
-        model: v.model || "N/A",
-        colour: v.colour || "N/A",
-        fuelType: v.fuelType || "N/A",
-        engineSize: v.engineSize || "N/A",
-        transmission: v.transmission || "N/A",
-        bodyType: v.bodyType || "N/A",
-        yearOfManufacture: v.yearOfManufacture || "N/A",
-        co2Emissions: tech.co2Emissions || "N/A",
-        taxStatus: tax.status || "N/A",
-        motStatus: mot.status || "N/A",
-        motExpiry: mot.expiryDate || "N/A",
+        registration: result.vehicle_registration_mark || plate,
+        make: result.dvla_manufacturer_desc || "N/A",
+        model: result.dvla_model_desc || "N/A",
+        fuelType: result.dvla_fuel_desc || "N/A",
+        bodyType: result.dvla_body_desc || "N/A",
+        transmission: result.dvla_transmission_desc || "N/A",
+        numberGears: result.number_gears || "N/A",
+        colour: result.colour || "N/A",
+        yearOfManufacture: result.manufactured_year || "N/A",
+        registrationDate: result.registration_date || "N/A",
+        vin: result.vehicle_identification_number || "N/A",
+        engineNumber: result.engine_number || "N/A",
+        co2Emissions: result.co2_gkm || "N/A",
+        engineCapacity: result.engine_capacity_cc || "N/A",
       },
+
+      status: {
+        isScrapped: result.is_scrapped || false,
+        isExported: result.is_exported || false,
+        isImported: result.is_imported || false,
+        isNonEuImport: result.is_non_eu_import || false,
+        stolen: result.stolen_vehicle_data_items?.some((i) => i.is_stolen) || false,
+      },
+
+      finance: (result.finance_data_items || []).map((f) => ({
+        startDate: f.finance_start_date,
+        type: f.finance_type,
+        company: f.finance_company,
+        contact: f.finance_company_contact_number,
+        agreement: f.finance_agreement_number,
+      })),
+
+      keepers: (result.keeper_data_items || []).map((k) => ({
+        numberPreviousKeepers: k.number_previous_keepers,
+        dateLastChange: k.date_of_last_keeper_change,
+      })),
+
+      plates: (result.cherished_data_items || []).map((p) => ({
+        from: p.previous_vehicle_registration_mark,
+        to: p.current_vehicle_registration_mark,
+        date: p.cherished_plate_transfer_date,
+      })),
+
+      colours: (result.colour_data_items || []).map((c) => ({
+        previousColour: c.last_colour,
+        dateChanged: c.date_of_last_colour_change,
+      })),
 
       technical: {
-        vin: tech.vin || "N/A",
-        powerBhp: perf.powerBhp || "N/A",
-        torqueNm: perf.torqueNm || "N/A",
-        topSpeedMph: perf.topSpeedMph || "N/A",
-        acceleration: perf.zeroToSixty || "N/A",
-        weightKg: tech.weight || "N/A",
-        lengthMm: dims.length || "N/A",
-        widthMm: dims.width || "N/A",
-        heightMm: dims.height || "N/A",
+        grossVehicleWeightKg: result.gross_vehicleweight_kg || "N/A",
+        kerbWeightKg: result.min_kerbweight_kg || "N/A",
+        maxPowerKw: result.max_netpower_kw || "N/A",
+        maxBrakedTowKg: result.max_braked_towing_weight_kg || "N/A",
+        maxUnbrakedTowKg: result.max_unbraked_towing_weight_kg || "N/A",
+        powerWeightRatio: result.power_weight_ratio_kw_kg || "N/A",
       },
 
-      history: {
-        previousKeepers: history.previousKeepers || "N/A",
-        plateChanges: history.plateChanges || "N/A",
-        writeOff: history.writeOff || false,
-        finance: history.financeOwed || false,
-        stolen: history.stolen || false,
-        mileage: history.mileage || "N/A",
-      },
+      condition: (result.condition_data_items || []).map((c) => ({
+        status: c.vehicle_status,
+        theftIndicator: c.theft_indicator,
+        insurer: c.insurer_name,
+        claimNumber: c.insurer_claim_number,
+        lossType: c.loss_type,
+      })),
     };
 
     res.json(grouped);
   } catch (error) {
-    console.error("OneAutoAPI fetch error:", error);
-    res.status(500).json({
-      error: "Server error fetching OneAutoAPI data",
-      details: error.message,
-    });
+    console.error("🔥 OneAutoAPI fetch error:", error);
+    res.status(500).json({ error: "Server error fetching OneAutoAPI data", details: error.message });
   }
 });
 
 // ----------------------------
-// Serve Frontend
+// Serve React frontend
 // ----------------------------
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir));
