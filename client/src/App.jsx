@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import "./styles.css";
 
 export default function App() {
@@ -7,12 +7,13 @@ export default function App() {
   const [error, setError] = useState(null);
   const [basic, setBasic] = useState(null);
   const [full, setFull] = useState(null);
-  const reportRef = useRef(null);
 
   const runCheck = async (type) => {
     if (!reg.trim()) return alert("Please enter a registration number");
     setLoading(true);
     setError(null);
+    setBasic(null);
+    setFull(null);
 
     try {
       const res = await fetch(`/api/${type}/${reg.trim().toUpperCase()}`);
@@ -22,66 +23,73 @@ export default function App() {
       if (type === "check") setBasic(data);
       if (type === "full") setFull(data);
     } catch (e) {
+      console.error(e);
       setError(e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const downloadPDF = () => window.print();
+  const formatValue = (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    if (typeof value === "boolean") return value ? "✅ Yes" : "❌ No";
+    return value;
+  };
 
-  const renderSection = (title, obj) => {
-    if (!obj || Object.keys(obj).length === 0) return null;
+  const Section = ({ title, data }) => {
+    if (!data) return null;
+    if (Array.isArray(data) && data.length === 0) return null;
+
     return (
       <div className="card">
         <div className="card-header">
           <h2>{title}</h2>
         </div>
-        <div className="card-body grid">
-          {Object.entries(obj).map(([key, value]) => (
-            <div key={key} className="kv">
-              <div className="kv-label">{formatLabel(key)}</div>
-              <div className="kv-value">{formatValue(value)}</div>
+        <div className="card-body">
+          {Array.isArray(data) ? (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {Object.keys(data[0] || {}).map((key) => (
+                    <th key={key}>{formatLabel(key)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((item, idx) => (
+                  <tr key={idx}>
+                    {Object.values(item).map((val, i) => (
+                      <td key={i}>{formatValue(val)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="grid">
+              {Object.entries(data).map(([key, val]) => (
+                <div key={key} className="kv">
+                  <div className="kv-label">{formatLabel(key)}</div>
+                  <div className="kv-value">{formatValue(val)}</div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </div>
     );
   };
 
-  const formatLabel = (key) => {
-    return key
+  const formatLabel = (key) =>
+    key
       .replace(/([A-Z])/g, " $1")
       .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  };
-
-  const formatValue = (value) => {
-    if (value === null || value === undefined || value === "") return "—";
-    if (typeof value === "boolean") return value ? "✅ Yes" : "❌ No";
-    if (Array.isArray(value)) {
-      return value.length > 0
-        ? value.map((v, i) => <div key={i}>{JSON.stringify(v)}</div>)
-        : "—";
-    }
-    if (typeof value === "object") {
-      return (
-        <div className="sub-grid">
-          {Object.entries(value).map(([k, v]) => (
-            <div key={k}>
-              <span className="muted">{formatLabel(k)}:</span> {formatValue(v)}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return String(value);
-  };
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
 
   return (
     <div className="app">
-      {/* Header */}
-      <header className="topbar no-print">
+      <header className="topbar">
         <div className="brand">
           <div className="logo">🚗</div>
           <div className="brand-text">
@@ -89,84 +97,88 @@ export default function App() {
             <span>Vehicle Intelligence</span>
           </div>
         </div>
-        <div className="actions">
-          <button className="btn ghost" onClick={downloadPDF} disabled={!basic && !full}>
-            ⬇️ Download PDF
-          </button>
-        </div>
+        <button
+          className="btn ghost"
+          onClick={() => window.print()}
+          disabled={!basic && !full}
+        >
+          ⬇️ Download PDF
+        </button>
       </header>
 
-      {/* Search */}
-      <section className="search no-print">
-        <h1 className="title">Run a Vehicle Check</h1>
-        <p className="subtitle">Dark, modern, dynamic — powered by SmartCheck</p>
+      <main className="content">
+        <section className="search no-print">
+          <h1>Smart Vehicle Check</h1>
+          <p className="subtitle">Enter your registration to begin</p>
 
-        <div className="search-controls">
-          <input
-            placeholder="Enter registration e.g. AB12CDE"
-            value={reg}
-            onChange={(e) => setReg(e.target.value.toUpperCase())}
-            maxLength={8}
-          />
-          <div className="buttons">
-            <button className="btn primary" disabled={loading} onClick={() => runCheck("check")}>
-              {loading ? "Checking…" : "🔍 Simple Check"}
-            </button>
-            <button className="btn success" disabled={loading} onClick={() => runCheck("full")}>
-              {loading ? "Fetching…" : "⚡ Full Check"}
-            </button>
-          </div>
-        </div>
-
-        {error && <div className="alert error">⚠️ {error}</div>}
-      </section>
-
-      {/* Loading */}
-      {loading && (
-        <div className="loading no-print">
-          <div className="spinner" />
-          <div>Fetching data…</div>
-        </div>
-      )}
-
-      {/* Results */}
-      <main className="report" ref={reportRef}>
-        {basic && (
-          <>
-            <div className="card card-green">
-              <div className="card-header">
-                <h2>Simple Check (DVLA)</h2>
-              </div>
-              <div className="card-body grid">
-                {Object.entries(basic).map(([key, value]) => (
-                  <div key={key} className="kv">
-                    <div className="kv-label">{formatLabel(key)}</div>
-                    <div className="kv-value">{formatValue(value)}</div>
-                  </div>
-                ))}
-              </div>
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder="e.g. S9VFA"
+              value={reg}
+              maxLength={8}
+              onChange={(e) => setReg(e.target.value.toUpperCase())}
+            />
+            <div className="buttons">
+              <button
+                className="btn primary"
+                disabled={loading}
+                onClick={() => runCheck("check")}
+              >
+                {loading ? "Checking…" : "🔍 Simple Check"}
+              </button>
+              <button
+                className="btn success"
+                disabled={loading}
+                onClick={() => runCheck("full")}
+              >
+                {loading ? "Fetching…" : "⚡ Full Check"}
+              </button>
             </div>
-          </>
+          </div>
+
+          {error && <div className="alert error">⚠️ {error}</div>}
+        </section>
+
+        {loading && (
+          <div className="loading">
+            <div className="spinner"></div>
+            <p>Fetching data…</p>
+          </div>
         )}
 
-        {full && (
+        {/* Results */}
+        {!loading && (
           <>
-            {Object.entries(full).map(([sectionName, sectionData]) =>
-              renderSection(sectionName, sectionData)
+            {basic && (
+              <Section title="Simple Check (DVLA)" data={basic} />
+            )}
+
+            {full && (
+              <>
+                <Section title="Summary" data={full.summary} />
+                <Section title="Finance" data={full.finance} />
+                <Section title="Keepers" data={full.keepers} />
+                <Section title="Plate History" data={full.plateHistory} />
+                <Section title="Condition" data={full.condition} />
+                <Section title="Stolen Records" data={full.stolen} />
+                <Section title="Colour Changes" data={full.colourChanges} />
+                <Section title="Search History" data={full.searches} />
+                <Section title="Technical Details" data={full.technical} />
+              </>
             )}
           </>
         )}
 
-        {!basic && !full && !loading && (
-          <div className="empty-state no-print">
-            <div className="ghost">Start by entering a registration above.</div>
+        {!loading && !basic && !full && (
+          <div className="empty">
+            <p>Start by entering a registration above 👆</p>
           </div>
         )}
       </main>
 
-      {/* Footer */}
       <footer className="footer no-print">
-        © {new Date().getFullYear()} SmartCheck • Data from DVLA & RapidCarCheck
+        © {new Date().getFullYear()} SmartCheck • Data from DVLA & OneAutoAPI
       </footer>
     </div>
   );
