@@ -7,12 +7,14 @@ export default function App() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [showRaw, setShowRaw] = useState(false);
+  const [openSections, setOpenSections] = useState({});
 
   const runCheck = async (type) => {
     if (!reg.trim()) return alert("Please enter a registration number");
     setLoading(true);
     setError(null);
     setResult(null);
+    setShowRaw(false);
 
     try {
       const res = await fetch(`/api/${type}/${reg.trim().toUpperCase()}`);
@@ -29,13 +31,23 @@ export default function App() {
     }
   };
 
-  // 🔹 Safely render any object (even deeply nested)
+  const toggleSection = (section) => {
+    setOpenSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
+  const formatLabel = (key) =>
+    key
+      .replace(/([A-Z])/g, " $1")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
+
   const renderObject = (obj) => {
     if (!obj) return <p className="muted">No data available</p>;
-
-    if (typeof obj !== "object") {
-      return <span>{String(obj)}</span>;
-    }
+    if (typeof obj !== "object") return <span>{String(obj)}</span>;
 
     if (Array.isArray(obj)) {
       return (
@@ -61,12 +73,24 @@ export default function App() {
     );
   };
 
-  const formatLabel = (key) =>
-    key
-      .replace(/([A-Z])/g, " $1")
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-      .trim();
+  const sections = result
+    ? Object.entries(result).map(([sectionName, sectionData]) => ({
+        title: formatLabel(sectionName),
+        icon:
+          {
+            summary: "🚗",
+            finance: "💰",
+            keepers: "👤",
+            plateHistory: "🔁",
+            condition: "⚙️",
+            stolen: "🚨",
+            colourChanges: "🎨",
+            searches: "📋",
+            technical: "🧰",
+          }[sectionName] || "📄",
+        data: sectionData,
+      }))
+    : [];
 
   return (
     <div className="app">
@@ -129,34 +153,48 @@ export default function App() {
         )}
 
         {!loading && result && (
-          <div className="card">
-            <div className="card-header">
-              <h2>Vehicle Check Results</h2>
+          <>
+            {sections.map(({ title, data, icon }, index) => (
+              <div key={index} className="collapsible">
+                <button
+                  className="collapsible-header"
+                  onClick={() => toggleSection(title)}
+                >
+                  <span className="icon">{icon}</span>
+                  <span>{title}</span>
+                  <span className="chevron">
+                    {openSections[title] ? "▲" : "▼"}
+                  </span>
+                </button>
+                <div
+                  className={`collapsible-body ${
+                    openSections[title] ? "open" : ""
+                  }`}
+                >
+                  {renderObject(data)}
+                </div>
+              </div>
+            ))}
+
+            <div className="raw-section">
+              <button
+                className="btn ghost"
+                onClick={() => setShowRaw((v) => !v)}
+              >
+                {showRaw ? "🙈 Hide Raw Data" : "👀 Show Raw Data"}
+              </button>
+              {showRaw && (
+                <pre className="raw-json">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              )}
             </div>
-            <div className="card-body">{renderObject(result)}</div>
-          </div>
+          </>
         )}
 
         {!loading && !result && (
           <div className="empty">
             <p>Start by entering a registration above 👆</p>
-          </div>
-        )}
-
-        {/* 👇 Show Raw JSON toggle */}
-        {result && (
-          <div className="raw-section">
-            <button
-              className="btn ghost"
-              onClick={() => setShowRaw((v) => !v)}
-            >
-              {showRaw ? "🙈 Hide Raw Data" : "👀 Show Raw Data"}
-            </button>
-            {showRaw && (
-              <pre className="raw-json">
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            )}
           </div>
         )}
       </main>
