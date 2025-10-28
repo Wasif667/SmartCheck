@@ -1,6 +1,6 @@
-// -----------------------------------------
-// SmartCheck Server (DVLA + OneAutoAPI v3)
-// -----------------------------------------
+// ----------------------------------------------
+// SmartCheck Server (DVLA + OneAutoAPI Integration)
+// ----------------------------------------------
 
 import express from "express";
 import fetch from "node-fetch";
@@ -11,9 +11,9 @@ import { fileURLToPath } from "url";
 
 dotenv.config();
 
-// -----------------------------------------
+// ----------------------------------------------
 // Setup
-// -----------------------------------------
+// ----------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -23,9 +23,9 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 
-// -----------------------------------------
+// ----------------------------------------------
 // Health Check
-// -----------------------------------------
+// ----------------------------------------------
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
@@ -35,9 +35,9 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// -----------------------------------------
+// ----------------------------------------------
 // ✅ DVLA Simple Check
-// -----------------------------------------
+// ----------------------------------------------
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
 
@@ -63,20 +63,20 @@ app.get("/api/check/:plate", async (req, res) => {
     const data = JSON.parse(text);
     const cleaned = {
       registration: data.registrationNumber || plate,
-      make: data.make || null,
-      model: data.model || null,
-      colour: data.colour || null,
-      fuelType: data.fuelType || null,
-      engineSize: data.engineCapacity || null,
-      transmission: data.transmission || null,
-      bodyType: data.bodyType || null,
-      yearOfManufacture: data.yearOfManufacture || null,
-      co2Emissions: data.co2Emissions || null,
-      taxDueDate: data.taxDueDate || null,
-      taxStatus: data.taxStatus || null,
-      motStatus: data.motStatus || null,
-      motExpiryDate: data.motExpiryDate || null,
-      dateOfLastV5CIssued: data.dateOfLastV5CIssued || null,
+      make: data.make || "—",
+      model: data.model || "—",
+      colour: data.colour || "—",
+      fuelType: data.fuelType || "—",
+      engineSize: data.engineCapacity || "—",
+      transmission: data.transmission || "—",
+      bodyType: data.bodyType || "—",
+      yearOfManufacture: data.yearOfManufacture || "—",
+      co2Emissions: data.co2Emissions || "—",
+      taxDueDate: data.taxDueDate || "—",
+      taxStatus: data.taxStatus || "—",
+      motStatus: data.motStatus || "—",
+      motExpiryDate: data.motExpiryDate || "—",
+      dateOfLastV5CIssued: data.dateOfLastV5CIssued || "—",
     };
 
     res.json(cleaned);
@@ -86,9 +86,9 @@ app.get("/api/check/:plate", async (req, res) => {
   }
 });
 
-// -----------------------------------------
-// ⚡ OneAutoAPI Experian AutoCheck v3 (Premium)
-// -----------------------------------------
+// ----------------------------------------------
+// ⚡ OneAutoAPI Experian AutoCheck v3 (Full Check)
+// ----------------------------------------------
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
   const apiKey = process.env.ONEAUTO_API_KEY;
@@ -97,7 +97,6 @@ app.get("/api/full/:plate", async (req, res) => {
     "https://api.oneautoapi.com/experian/autocheck/v3";
 
   if (!apiKey) {
-    console.error("❌ ONEAUTO_API_KEY missing from environment variables");
     return res.status(500).json({ error: "Missing OneAutoAPI key" });
   }
 
@@ -120,79 +119,95 @@ app.get("/api/full/:plate", async (req, res) => {
     const data = JSON.parse(text);
     const r = data.result || {};
 
-    // 🧩 Map and group data
+    // ------------------------------------------
+    // Map and normalize all sections
+    // ------------------------------------------
     const mapped = {
       summary: {
-        registration: r.vehicle_registration_mark,
-        make: r.dvla_manufacturer_desc,
-        model: r.dvla_model_desc,
-        fuelType: r.dvla_fuel_desc,
-        bodyType: r.dvla_body_desc,
-        transmission: r.dvla_transmission_desc,
-        gears: r.number_gears,
-        colour: r.colour,
-        year: r.manufactured_year,
-        registrationDate: r.registration_date,
-        vin: r.vehicle_identification_number,
-        engineNumber: r.engine_number,
-        engineCapacityCC: r.engine_capacity_cc,
-        co2Gkm: r.co2_gkm,
-        kerbWeightKg: r.min_kerbweight_kg,
-        grossWeightKg: r.gross_vehicleweight_kg,
-        maxPowerKw: r.max_netpower_kw,
+        registration: r.vehicle_registration_mark || plate,
+        make: r.dvla_manufacturer_desc || "—",
+        model: r.dvla_model_desc || "—",
+        fuelType: r.dvla_fuel_desc || "—",
+        bodyType: r.dvla_body_desc || "—",
+        transmission: r.dvla_transmission_desc || "—",
+        gears: r.number_gears || "—",
+        colour: r.colour || "—",
+        year: r.manufactured_year || "—",
+        registrationDate: r.registration_date || "—",
+        vin: r.vehicle_identification_number || "—",
+        engineNumber: r.engine_number || "—",
+        engineCapacityCC: r.engine_capacity_cc || "—",
+        co2Gkm: r.co2_gkm || "—",
+        kerbWeightKg: r.min_kerbweight_kg || "—",
+        grossWeightKg: r.gross_vehicleweight_kg || "—",
+        maxPowerKw: r.max_netpower_kw || "—",
       },
 
-      finance: (r.finance_data_items || []).map((f) => ({
-        startDate: f.finance_start_date,
-        termMonths: f.finance_term_months,
-        type: f.finance_type,
-        company: f.finance_company,
-        contact: f.finance_company_contact_number,
-        agreement: f.finance_agreement_number,
-      })),
+      finance: Array.isArray(r.finance_data_items)
+        ? r.finance_data_items.map((f) => ({
+            startDate: f.finance_start_date || "—",
+            termMonths: f.finance_term_months || "—",
+            type: f.finance_type || "—",
+            company: f.finance_company || "—",
+            contact: f.finance_company_contact_number || "—",
+            agreement: f.finance_agreement_number || "—",
+          }))
+        : [],
 
-      keepers: (r.keeper_data_items || []).map((k) => ({
-        previousKeepers: k.number_previous_keepers,
-        lastKeeperChange: k.date_of_last_keeper_change,
-      })),
+      keepers: Array.isArray(r.keeper_data_items)
+        ? r.keeper_data_items.map((k) => ({
+            previousKeepers: k.number_previous_keepers || "—",
+            lastKeeperChange: k.date_of_last_keeper_change || "—",
+          }))
+        : [],
 
-      plateHistory: (r.cherished_data_items || []).map((p) => ({
-        from: p.previous_vehicle_registration_mark,
-        to: p.current_vehicle_registration_mark,
-        date: p.cherished_plate_transfer_date,
-        transferType: p.transfer_type,
-      })),
+      plateHistory: Array.isArray(r.cherished_data_items)
+        ? r.cherished_data_items.map((p) => ({
+            from: p.previous_vehicle_registration_mark || "—",
+            to: p.current_vehicle_registration_mark || "—",
+            date: p.cherished_plate_transfer_date || "—",
+            transferType: p.transfer_type || "—",
+          }))
+        : [],
 
-      condition: (r.condition_data_items || []).map((c) => ({
-        status: c.vehicle_status,
-        insurer: c.insurer_name,
-        claimNumber: c.insurer_claim_number,
-        theftIndicator: c.theft_indicator,
-        lossType: c.loss_type,
-      })),
+      condition: Array.isArray(r.condition_data_items)
+        ? r.condition_data_items.map((c) => ({
+            status: c.vehicle_status || "—",
+            insurer: c.insurer_name || "—",
+            claimNumber: c.insurer_claim_number || "—",
+            theftIndicator: c.theft_indicator || "—",
+            lossType: c.loss_type || "—",
+          }))
+        : [],
 
-      stolen: (r.stolen_vehicle_data_items || []).map((s) => ({
-        dateReported: s.date_reported,
-        policeForce: s.police_force,
-        isStolen: s.is_stolen,
-      })),
+      stolen: Array.isArray(r.stolen_vehicle_data_items)
+        ? r.stolen_vehicle_data_items.map((s) => ({
+            dateReported: s.date_reported || "—",
+            policeForce: s.police_force || "—",
+            isStolen: s.is_stolen || false,
+          }))
+        : [],
 
-      colourChanges: (r.colour_data_items || []).map((c) => ({
-        lastColour: c.last_colour,
-        dateChanged: c.date_of_last_colour_change,
-      })),
+      colourChanges: Array.isArray(r.colour_data_items)
+        ? r.colour_data_items.map((c) => ({
+            lastColour: c.last_colour || "—",
+            dateChanged: c.date_of_last_colour_change || "—",
+          }))
+        : [],
 
-      searches: (r.previous_search_items || []).map((s) => ({
-        date: s.date_of_search,
-        time: s.time_of_search,
-        searchedBy: s.business_type_searching,
-      })),
+      searches: Array.isArray(r.previous_search_items)
+        ? r.previous_search_items.map((s) => ({
+            date: s.date_of_search || "—",
+            time: s.time_of_search || "—",
+            searchedBy: s.business_type_searching || "—",
+          }))
+        : [],
 
       technical: {
-        soundStationaryDb: r.stationary_soundlevel_db,
-        soundDrivebyDb: r.driveby_soundlevel_db,
-        towingBrakedKg: r.max_braked_towing_weight_kg,
-        towingUnbrakedKg: r.max_unbraked_towing_weight_kg,
+        soundStationaryDb: r.stationary_soundlevel_db || "—",
+        soundDrivebyDb: r.driveby_soundlevel_db || "—",
+        towingBrakedKg: r.max_braked_towing_weight_kg || "—",
+        towingUnbrakedKg: r.max_unbraked_towing_weight_kg || "—",
       },
     };
 
@@ -206,9 +221,9 @@ app.get("/api/full/:plate", async (req, res) => {
   }
 });
 
-// -----------------------------------------
+// ----------------------------------------------
 // Serve Frontend
-// -----------------------------------------
+// ----------------------------------------------
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir));
 app.get("*", (_, res) => res.sendFile(path.join(publicDir, "index.html")));
