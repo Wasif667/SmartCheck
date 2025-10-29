@@ -1,232 +1,146 @@
-// ----------------------------------------------
-// SmartCheck Server (DVLA + OneAutoAPI Integration)
-// ----------------------------------------------
+// ==========================================================
+// SmartCheck - Vehicle Check Backend
+// Supports: DVLA, OneAutoAPI (Full Check), and MOT History
+// ==========================================================
 
 import express from "express";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
-import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 
 dotenv.config();
+const app = express();
+const PORT = process.env.PORT || 5000;
 
-// ----------------------------------------------
-// Setup
-// ----------------------------------------------
+// For serving frontend files on Render
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "public")));
 
-const app = express();
-const PORT = process.env.PORT || 3001;
-
-app.use(express.json());
-app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
-
-// ----------------------------------------------
-// Health Check
-// ----------------------------------------------
-app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    service: "SmartCheck API",
-    environment: process.env.NODE_ENV || "development",
-    time: new Date().toISOString(),
-  });
+// Root
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ----------------------------------------------
-// ✅ DVLA Simple Check
-// ----------------------------------------------
+// ==========================================================
+// 1️⃣ DVLA SIMPLE CHECK (basic vehicle data)
+// ==========================================================
 app.get("/api/check/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
+  const DVLA_API_KEY = process.env.DVLA_API_KEY;
 
   try {
     const response = await fetch(
-      "https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles",
+      `https://driver-vehicle-licensing.api.gov.uk/vehicle-enquiry/v1/vehicles`,
       {
         method: "POST",
         headers: {
-          "x-api-key": process.env.DVLA_API_KEY,
+          "x-api-key": DVLA_API_KEY,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ registrationNumber: plate }),
       }
     );
 
-    const text = await response.text();
+    const data = await response.json();
     if (!response.ok) {
-      console.error("DVLA API error:", text);
-      return res.status(response.status).json({ error: "DVLA API error", details: text });
+      console.error("DVLA API error:", data);
+      return res
+        .status(response.status)
+        .json({ error: "DVLA API error", details: data });
     }
 
-    const data = JSON.parse(text);
-    const cleaned = {
-      registration: data.registrationNumber || plate,
-      make: data.make || "—",
-      model: data.model || "—",
-      colour: data.colour || "—",
-      fuelType: data.fuelType || "—",
-      engineSize: data.engineCapacity || "—",
-      transmission: data.transmission || "—",
-      bodyType: data.bodyType || "—",
-      yearOfManufacture: data.yearOfManufacture || "—",
-      co2Emissions: data.co2Emissions || "—",
-      taxDueDate: data.taxDueDate || "—",
-      taxStatus: data.taxStatus || "—",
-      motStatus: data.motStatus || "—",
-      motExpiryDate: data.motExpiryDate || "—",
-      dateOfLastV5CIssued: data.dateOfLastV5CIssued || "—",
-    };
-
-    res.json(cleaned);
+    console.log(`✅ DVLA data fetched for ${plate}`);
+    res.json(data);
   } catch (error) {
     console.error("DVLA fetch error:", error);
-    res.status(500).json({ error: "Server error fetching DVLA data", details: error.message });
+    res.status(500).json({ error: "Server error fetching DVLA data" });
   }
 });
 
-// ----------------------------------------------
-// ⚡ OneAutoAPI Experian AutoCheck v3 (Full Check)
-// ----------------------------------------------
+// ==========================================================
+// 2️⃣ FULL VEHICLE CHECK (OneAutoAPI)
+// ==========================================================
 app.get("/api/full/:plate", async (req, res) => {
   const plate = req.params.plate.toUpperCase();
-  const apiKey = process.env.ONEAUTO_API_KEY;
-  const baseUrl =
-    process.env.ONEAUTO_API_URL ||
-    "https://api.oneautoapi.com/experian/autocheck/v3";
-
-  if (!apiKey) {
-    return res.status(500).json({ error: "Missing OneAutoAPI key" });
-  }
-
-  const url = `${baseUrl}?vehicle_registration_mark=${plate}`;
+  const ONEAUTO_KEY = process.env.ONEAUTO_API_KEY;
 
   try {
-    console.log("🌐 Fetching OneAutoAPI:", url);
-
+    const url = `https://api.oneautoapi.com/experian/autocheck/v3?vehicle_registration_mark=${plate}`;
     const response = await fetch(url, {
-      headers: { "x-api-key": apiKey },
+      headers: { "x-api-key": ONEAUTO_KEY },
     });
 
     const text = await response.text();
-    console.log("🔍 OneAutoAPI raw response:", text.slice(0, 400));
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: "OneAutoAPI error", details: text });
-    }
+    console.log("OneAutoAPI raw response:", text);
 
     const data = JSON.parse(text);
-    const r = data.result || {};
+    if (!response.ok || !data.success) {
+      console.error("❌ OneAutoAPI error:", data);
+      return res
+        .status(response.status)
+        .json({ error: "OneAutoAPI error", details: data });
+    }
 
-    // ------------------------------------------
-    // Map and normalize all sections
-    // ------------------------------------------
-    const mapped = {
-      summary: {
-        registration: r.vehicle_registration_mark || plate,
-        make: r.dvla_manufacturer_desc || "—",
-        model: r.dvla_model_desc || "—",
-        fuelType: r.dvla_fuel_desc || "—",
-        bodyType: r.dvla_body_desc || "—",
-        transmission: r.dvla_transmission_desc || "—",
-        gears: r.number_gears || "—",
-        colour: r.colour || "—",
-        year: r.manufactured_year || "—",
-        registrationDate: r.registration_date || "—",
-        vin: r.vehicle_identification_number || "—",
-        engineNumber: r.engine_number || "—",
-        engineCapacityCC: r.engine_capacity_cc || "—",
-        co2Gkm: r.co2_gkm || "—",
-        kerbWeightKg: r.min_kerbweight_kg || "—",
-        grossWeightKg: r.gross_vehicleweight_kg || "—",
-        maxPowerKw: r.max_netpower_kw || "—",
-      },
-
-      finance: Array.isArray(r.finance_data_items)
-        ? r.finance_data_items.map((f) => ({
-            startDate: f.finance_start_date || "—",
-            termMonths: f.finance_term_months || "—",
-            type: f.finance_type || "—",
-            company: f.finance_company || "—",
-            contact: f.finance_company_contact_number || "—",
-            agreement: f.finance_agreement_number || "—",
-          }))
-        : [],
-
-      keepers: Array.isArray(r.keeper_data_items)
-        ? r.keeper_data_items.map((k) => ({
-            previousKeepers: k.number_previous_keepers || "—",
-            lastKeeperChange: k.date_of_last_keeper_change || "—",
-          }))
-        : [],
-
-      plateHistory: Array.isArray(r.cherished_data_items)
-        ? r.cherished_data_items.map((p) => ({
-            from: p.previous_vehicle_registration_mark || "—",
-            to: p.current_vehicle_registration_mark || "—",
-            date: p.cherished_plate_transfer_date || "—",
-            transferType: p.transfer_type || "—",
-          }))
-        : [],
-
-      condition: Array.isArray(r.condition_data_items)
-        ? r.condition_data_items.map((c) => ({
-            status: c.vehicle_status || "—",
-            insurer: c.insurer_name || "—",
-            claimNumber: c.insurer_claim_number || "—",
-            theftIndicator: c.theft_indicator || "—",
-            lossType: c.loss_type || "—",
-          }))
-        : [],
-
-      stolen: Array.isArray(r.stolen_vehicle_data_items)
-        ? r.stolen_vehicle_data_items.map((s) => ({
-            dateReported: s.date_reported || "—",
-            policeForce: s.police_force || "—",
-            isStolen: s.is_stolen || false,
-          }))
-        : [],
-
-      colourChanges: Array.isArray(r.colour_data_items)
-        ? r.colour_data_items.map((c) => ({
-            lastColour: c.last_colour || "—",
-            dateChanged: c.date_of_last_colour_change || "—",
-          }))
-        : [],
-
-      searches: Array.isArray(r.previous_search_items)
-        ? r.previous_search_items.map((s) => ({
-            date: s.date_of_search || "—",
-            time: s.time_of_search || "—",
-            searchedBy: s.business_type_searching || "—",
-          }))
-        : [],
-
-      technical: {
-        soundStationaryDb: r.stationary_soundlevel_db || "—",
-        soundDrivebyDb: r.driveby_soundlevel_db || "—",
-        towingBrakedKg: r.max_braked_towing_weight_kg || "—",
-        towingUnbrakedKg: r.max_unbraked_towing_weight_kg || "—",
-      },
-    };
-
-    res.json(mapped);
+    console.log(`✅ Full vehicle check complete for ${plate}`);
+    res.json(data.result || data);
   } catch (error) {
-    console.error("🔥 OneAutoAPI fetch error:", error);
-    res.status(500).json({
-      error: "Server error fetching OneAutoAPI data",
-      details: error.message,
-    });
+    console.error("OneAutoAPI fetch error:", error);
+    res
+      .status(500)
+      .json({ error: "Server error fetching OneAutoAPI data", details: error });
   }
 });
 
-// ----------------------------------------------
-// Serve Frontend
-// ----------------------------------------------
-const publicDir = path.join(__dirname, "public");
-app.use(express.static(publicDir));
-app.get("*", (_, res) => res.sendFile(path.join(publicDir, "index.html")));
+// ==========================================================
+// 3️⃣ MOT HISTORY CHECK
+// ==========================================================
+app.get("/api/mot/:plate", async (req, res) => {
+  const plate = req.params.plate.toUpperCase();
+  const MOT_API_KEY = process.env.MOT_API_KEY;
 
-app.listen(PORT, () => console.log(`✅ SmartCheck running on port ${PORT}`));
+  try {
+    const response = await fetch(
+      `https://beta.check-mot.service.gov.uk/trade/vehicles/mot-tests?registration=${plate}`,
+      {
+        headers: {
+          "x-api-key": MOT_API_KEY,
+          Accept: "application/json+v6",
+        },
+      }
+    );
+
+    const text = await response.text();
+    console.log("MOT API raw response:", text);
+
+    if (!response.ok) {
+      console.error("❌ MOT API error:", text);
+      return res
+        .status(response.status)
+        .json({ error: "MOT API failed", details: text });
+    }
+
+    const data = JSON.parse(text);
+    console.log(`✅ MOT data fetched for ${plate}`);
+    res.json(data);
+  } catch (error) {
+    console.error("MOT fetch error:", error);
+    res.status(500).json({ error: "Server error fetching MOT history" });
+  }
+});
+
+// ==========================================================
+// Serve Frontend (React build)
+// ==========================================================
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ==========================================================
+// Start Server
+// ==========================================================
+app.listen(PORT, () => {
+  console.log(`🚀 SmartCheck backend running on port ${PORT}`);
+});
 
